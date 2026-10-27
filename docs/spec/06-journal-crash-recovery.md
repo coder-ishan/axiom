@@ -1,6 +1,6 @@
 # 06 — The journal: crash recovery semantics
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 An append-only JSONL write-ahead log, one file per task. Flush rule: **INTENT records for gated/irreversible actions are fsynced before dispatch**; everything else is buffered (≤200ms loss window).
 

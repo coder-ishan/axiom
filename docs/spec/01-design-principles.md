@@ -1,6 +1,6 @@
 # 01 — Design principles
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 1. **Fail closed.** Missing permission, dead model server, ambiguous state → the agent stops. It never "tries anyway."
 2. **Never act blind.** Every dispatch is preceded by a dispatch-time check that the target still exists in the live tree. The plan-time observation is a hypothesis; the live tree at t<sub>dispatch</sub> is the truth.

@@ -1,6 +1,6 @@
 # 14 — ADR log: decisions with rejected alternatives
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 | ADR | Decision | Alternatives rejected | Why / consequence |
 |---|---|---|---|

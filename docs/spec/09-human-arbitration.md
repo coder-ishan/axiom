@@ -1,6 +1,6 @@
 # 09 — Human arbitration: the user always wins
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 ## Yield semantics
 
@@ -15,3 +15,10 @@
 - **No batch auto-approve.** "Always allow" memory is per action-pattern, capped at 5 uses, and the G2-top class (pay/install/security/delete-all) never memorizes — Touch ID every time (LocalAuthentication in P1).
 - **Asking budget: ≤ 3 asks per task** → beyond that, HALT ("this task needs decisions I keep having to make — let's do it together"). More asks = the agent is out of its depth; saying so is the honest output.
 - **Secure fields (passwords):** the agent focuses the field, then yields: "Please type your password." Completion is verified by observing the downstream state (submit enabled / next screen), never by reading the field. Passwords never touch the journal, the trajectory corpus, or the context window. The agent does not manage credentials at all in v1; if a workflow needs one, it asks the user live.
+
+## Voice arbitration (§21 integration)
+
+- Voice commands (wake word → dictation) are an explicit input channel; they do not trigger YIELD — they *direct* the agent.
+- **"Stop."** — a dedicated, high-precision-only phrase, equivalent to the kill switch.
+- **G2 is never voice-approved** (speaker-injection defense, §10): gate read-backs are announced via TTS, approval still requires Touch ID or a physical click.
+- TTS announcements duck/cancel when the VAD hears the user speaking — Axiom never talks over you.

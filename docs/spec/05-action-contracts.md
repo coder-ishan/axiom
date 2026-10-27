@@ -1,6 +1,6 @@
 # 05 — Action contracts: TOCTOU, idempotency, partial actions
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 This section is the heart of the architecture. Every action class declares a **contract**: what it expects to change, how we verify it, whether retrying it is safe, and what gate it needs. Contracts turn "the UI didn't change — should I click again?" from a guess into a policy.
 

@@ -1,6 +1,6 @@
 # 04 — AX perception subsystem
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 ## Reader mechanics (the real IP of the project)
 
@@ -12,7 +12,7 @@
 
 ## The stable-ID problem (a design decision with large consequences)
 
-Element identity must survive reorderings and appends, or (a) the prefix cache invalidates constantly and (b) the model's references dangle between observe and act. Index-based IDs ("button 4 of window 1") renumber on every insertion — disqualified. CURSOR uses **content-derived IDs**:
+Element identity must survive reorderings and appends, or (a) the prefix cache invalidates constantly and (b) the model's references dangle between observe and act. Index-based IDs ("button 4 of window 1") renumber on every insertion — disqualified. Axiom uses **content-derived IDs**:
 
 ```text
 id = hash(role + normalize(label/value) + parent-id)[:8]

@@ -1,6 +1,6 @@
 # 08 — Caching rules & invalidation (the speed story, made safe)
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 | Cache | Contents | Key | Invalidated when | Failure mode if stale | Defense |
 |---|---|---|---|---|---|

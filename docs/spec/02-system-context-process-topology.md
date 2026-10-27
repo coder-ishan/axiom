@@ -1,23 +1,24 @@
 # 02 — System context & process topology
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 ```text
 ┌────────────────────────────────────────────────────────────────────┐
-│  P1 cursor (menu-bar app / CLI v0)  — holds NO special powers       │
+│  P1 axiom (menu-bar app / CLI v0)  — no action powers              │
 │     approval cards · kill switch · live status · audit viewer      │
+│     presence-dot overlays (§20, display-only) · VAD + wake word    │
 │     Touch ID prompts for the top gate class (LocalAuthentication)  │
 └──────△─────────────────────────────────────────────────────────────┘
        │ unix domain socket, SO_PEERCRED (same-UID only), heartbeat 1s
 ┌──────▽─────────────────────────────────────────────────────────────┐
-│  P2 cursord (orchestrator, Python)                                 │
+│  P2 axiomd (orchestrator, Python)                                 │
 │     agent loop state machine · policy engine · journal (WAL)       │
 │     AX tree reader + delta differ   ← holds Accessibility grant    │
 │     action dispatch: AX actions / AppleScript templates / CGEvents │
 └──────△─────────────────────────────────────────────────────────────┘
        │ localhost HTTP (OpenAI-compatible + /route /embed endpoints)
 ┌──────▽──────────────────────────┐  ┌─────────────────────────────────────────┐
-│  P3 cursor-models (resident ~2GB)│  │  P4.x lazy servers (spawned on demand,  │
+│  P3 axiom-models (resident ~2GB)│  │  P4.x lazy servers (spawned on demand,  │
 │  pilot 2B + draft 0.6B (spec.)   │  │  killed under memory pressure):         │
 │  executor 270M (grammar-constr.) │  │   · escalation Qwen3.5-9B ~5.5GB        │
 │  router 66M · embedder MiniLM    │  │   · pixel stack: Holo1.5-3B ~1.9GB      │
@@ -29,7 +30,7 @@
 ## Why this topology
 
 - **Crash containment:** the crash-prone part is the models (Metal OOM, engine asserts). They die in P3/P4; P2's journal is on disk and launchd relaunches. The AX-granted process (P2) is the *stable* one.
-- **Permission locality:** TCC grants bind to a code-signing designated requirement. P2 holds Accessibility + Automation; P1 holds LocalAuthentication + (fallback) Screen Recording. Never one process holding everything.
+- **Permission locality:** TCC grants bind to a code-signing designated requirement. P2 holds Accessibility + Automation; P1 holds LocalAuthentication, **Microphone** (§21), and (fallback) Screen Recording — plus its display-only overlays. Never one process holding everything.
 - **Control-plane hijack defense:** the P1↔P2 socket checks peer UID. A same-user process can still reach it — see §10 (Threat model) for the honest limits and layered mitigations.
 
 > [!WARNING]

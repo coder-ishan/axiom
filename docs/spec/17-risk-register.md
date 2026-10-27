@@ -1,6 +1,6 @@
 # 17 — Risk register (architecture-aware)
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 | Risk | Sev | Mitigation | Residual |
 |---|---|---|---|

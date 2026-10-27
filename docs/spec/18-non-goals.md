@@ -1,6 +1,6 @@
 # 18 — Explicit non-goals (v1)
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 - No autonomous/unattended operation
 - No multi-task concurrency (tasks queue serially)

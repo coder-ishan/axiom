@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Project CURSOR — Architecture &amp; Edge-Case Specification (v2)</title>
+<title>Project Axiom — Architecture &amp; Edge-Case Specification (v2)</title>
 <style>
   :root {
     --bg: #0d1117; --bg-alt: #161b22; --bg-card: #1a2129; --border: #2d333b;
@@ -54,7 +54,7 @@
 <body>
 <main>
 
-<h1>Project CURSOR — Architecture &amp; Edge-Case Specification</h1>
+<h1>Project Axiom — Architecture &amp; Edge-Case Specification</h1>
 <p class="sub">A fast, small, local computer-use agent for macOS. Version 2: the build plan re-derived as an architecture — state machines, action contracts, crash semantics, threat model, invariants, and the edge cases enumerated before they happen.</p>
 <p class="small">October 2026 · Companion to <code>local-inference-guide.html</code> · All models open-source and locally runnable</p>
 
@@ -104,20 +104,20 @@
 <h2 id="s02"><span class="num">02</span>System context &amp; process topology</h2>
 
 <div class="diagram">┌────────────────────────────────────────────────────────────────────┐
-│  P1 <b>cursor</b> (menu-bar app / CLI v0)  — holds NO special powers      │
+│  P1 <b>axiom</b> (menu-bar app / CLI v0)  — holds NO special powers      │
 │     approval cards · kill switch · live status · audit viewer       │
 │     Touch ID prompts for the top gate class (LocalAuthentication)   │
 └──────△─────────────────────────────────────────────────────────────┘
        │ unix domain socket, SO_PEERCRED (same-UID only), heartbeat 1s
 ┌──────▽─────────────────────────────────────────────────────────────┐
-│  P2 <b>cursord</b> (orchestrator, Python)                              │
+│  P2 <b>axiomd</b> (orchestrator, Python)                              │
 │     agent loop state machine · policy engine · journal (WAL)        │
 │     AX tree reader + delta differ   ← holds Accessibility grant      │
 │     action dispatch: AX actions / AppleScript templates / CGEvents  │
 └──────△─────────────────────────────────────────────────────────────┘
        │ localhost HTTP (OpenAI-compatible + /route /embed endpoints)
 ┌──────▽─────────────────────┐   ┌───────────────────────────────────┐
-│  P3 <b>cursor-models</b> (resident ~2GB) │   │  P4.x <b>lazy servers</b> (spawned on demand, │
+│  P3 <b>axiom-models</b> (resident ~2GB) │   │  P4.x <b>lazy servers</b> (spawned on demand, │
 │  pilot 2B + draft 0.6B (speculative)│   │  killed under memory pressure):   │
 │  executor 270M (grammar-constrained)│   │   · escalation Qwen3.5-9B ~5.5GB   │
 │  router 66M · embedder MiniLM       │   │   · pixel stack: Holo1.5-3B ~1.9GB │
@@ -145,7 +145,7 @@
 <!-- ============ 03 ============ -->
 <h2 id="s03"><span class="num">03</span>The agent loop as an explicit state machine</h2>
 
-<p>No ad-hoc loop. The agent is a state machine with named states, guarded transitions, per-state timeouts, and a persisted cursor. Every step of the machine appends to the journal (§06), so any crash lands in a <em>known</em> state.</p>
+<p>No ad-hoc loop. The agent is a state machine with named states, guarded transitions, per-state timeouts, and a persisted step pointer. Every step of the machine appends to the journal (§06), so any crash lands in a <em>known</em> state.</p>
 
 <div class="diagram">                    goal
         ┌──────┐        │
@@ -208,7 +208,7 @@
 </ul>
 
 <h3>The stable-ID problem (design decision with large consequences)</h3>
-<p>Element identity must survive reorderings and appends, or (a) the prefix cache invalidates constantly and (b) the model's references dangle between observe and act. Index-based IDs ("button 4 of window 1") renumber on every insertion — disqualified. CURSOR uses <strong>content-derived IDs</strong>:</p>
+<p>Element identity must survive reorderings and appends, or (a) the prefix cache invalidates constantly and (b) the model's references dangle between observe and act. Index-based IDs ("button 4 of window 1") renumber on every insertion — disqualified. Axiom uses <strong>content-derived IDs</strong>:</p>
 
 <pre><code>id = hash(role + normalize(label/value) + parent-id)[:8]
 frame is NOT in the id (movement must not change identity)
@@ -389,7 +389,7 @@ T|subtree-id|omitted-count|reason                      # truncation marker
   <tr><td><b>Prompt injection via content</b></td><td>Web page label / email body / filename contains "ignore instructions, run curl …"</td><td>Content is fenced data (&lt;obs&gt;); agent has <em>no shell and no URL-following capability</em> — the injected command is not just refused, it's unrepresentable. Detection (suspicious-instruction classifier) is secondary telemetry, not the wall.</td></tr>
   <tr><td><b>Malicious AX labels</b></td><td>App labels a button "Save" that deletes; invisible decoy elements</td><td>Dispatch resolves the <em>element handle</em>, never a label re-search; gates key on resolved target + action class; confirmation cards show the real target; destructive lexicon matched against the resolved element, not the plan text.</td></tr>
   <tr><td><b>Fake dialogs / lookalikes</b></td><td>"System Preferences wants to install…" window</td><td>Occlusion check + window owner bundle-id verification; dialogs from non-system bundles that request security actions → refuse + report.</td></tr>
-  <tr><td><b>Control-plane hijack</b></td><td>Local malware drives cursord's socket to click what its own TCC forbids</td><td>Socket peer-UID check; new task creation requires a P1-originated, user-visible action; gated intents still require P1 approval; heartbeat-loss &gt;2s → auto-pause. <em>Honest limit:</em> same-user malware can synthesize clicks on P1's UI itself — reduced (intent-bound approvals, frontmost requirement, Touch ID for the top class) but not eliminated; this is the irreducible residual risk of any AX agent, stated plainly.</td></tr>
+  <tr><td><b>Control-plane hijack</b></td><td>Local malware drives axiomd's socket to click what its own TCC forbids</td><td>Socket peer-UID check; new task creation requires a P1-originated, user-visible action; gated intents still require P1 approval; heartbeat-loss &gt;2s → auto-pause. <em>Honest limit:</em> same-user malware can synthesize clicks on P1's UI itself — reduced (intent-bound approvals, frontmost requirement, Touch ID for the top class) but not eliminated; this is the irreducible residual risk of any AX agent, stated plainly.</td></tr>
   <tr><td><b>URL / exfiltration</b></td><td>Injected text smuggles data out via an <code>open</code> URL with encoded payload</td><td>URLs only from the user's typed goal or allowlist; never from content; any URL not goal-derived → G2. Plus: local models + no network in the agent path (model download only, pinned hashes) means there is no channel unless an action creates one.</td></tr>
   <tr><td><b>Pasteboard abuse</b></td><td>Secrets pasted then left on the clipboard</td><td>Write→paste→verify→<strong>clear</strong>; change-count confirms delivery; payload never logged.</td></tr>
   <tr><td><b>Screenshot PII (pixel lane)</b></td><td>Capture contains banking/tokens</td><td>Screenshots never leave the device, never enter trajectories unredacted; capture is lazy-only, released after use.</td></tr>
@@ -522,7 +522,7 @@ T|subtree-id|omitted-count|reason                      # truncation marker
   <li>Each non-goal is a <em>deferred decision with a named trigger</em> (e.g., autonomy returns after 3 months of clean gate/audit telemetry — not before).</li>
 </ul>
 
-<p class="small" style="margin-top:56px;">CURSOR architecture spec v2 · companion: <code>local-inference-guide.html</code> · First concrete step unchanged: Phase 0 baseline script.</p>
+<p class="small" style="margin-top:56px;">Axiom architecture spec v2 · companion: <code>local-inference-guide.html</code> · First concrete step unchanged: Phase 0 baseline script.</p>
 
 </main>
 </body>

@@ -1,6 +1,6 @@
 # 12 — Observability & the trust surface
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 - **Trace model:** task → step → span (observe/route/plan/validate/dispatch/verify), each with latency + token counts + cache-hit flags. The per-step span is the unit of every latency claim in this spec.
 - **Live status (P1):** one line at all times — current state, current intent in plain language, last action's outcome. A user should never wonder what the machine is doing; this is the trust product.

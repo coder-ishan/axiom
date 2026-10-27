@@ -1,6 +1,6 @@
 # 19 — Self-improvement loop (the moat)
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 The loop the cloud can't run: every day of use makes *your* executor better — locally, on your trajectories, gated by replay.
 

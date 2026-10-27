@@ -1,4 +1,4 @@
-# CURSOR Architecture Specification — Index
+# Axiom Architecture Specification — Index
 
 > Version 2 (October 2026). v1 said *what* to build; this spec says *how it behaves when everything goes wrong* — which is 80% of what a responsible agent architecture actually is.
 
@@ -26,6 +26,9 @@
 | 17 | [Risk register](17-risk-register.md) | Risks, mitigations, honest residuals |
 | 18 | [Explicit non-goals](18-non-goals.md) | What v1 refuses to do, and what would change that |
 | 19 | [Self-improvement loop](19-self-improvement-loop.md) | Trajectories → nightly LoRA → replay-gated promotion |
+| 20 | [Visual presence — the dot](20-visual-presence.md) | Menu-bar dot, on-screen action dot, field halo — with a rendering contract |
+| 21 | [Voice I/O](21-voice-io.md) | Wake word, STT, TTS — fully local; voice never bypasses gates |
+| 22 | [Open-source posture](22-open-source-posture.md) | License, attribution, the "fully local" guarantees |
 
 ## How the docs fit together
 

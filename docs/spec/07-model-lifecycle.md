@@ -1,6 +1,6 @@
 # 07 — Model lifecycle & resource management
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 ## Load matrix
 
@@ -10,11 +10,14 @@
 | Escalation 9B (~5.5GB) | first low-confidence step; kept warm 10 min | memory-pressure ladder or 10-min idle |
 | Pixel stack (~2.1GB incl. capture) | first pixel-lane step; kept warm 5 min | ladder or 5-min idle |
 | GLiNER PII (0.3B) | only at trajectory-redaction time (log path, never the agent path) | immediately after |
+| VAD + wake word (~5MB, in P1) | daemon start — always on | only when the user pauses Axiom |
+| Parakeet STT (0.6B) | first voice task; resident in voice-first mode | ladder, or voice-first off |
+| Kokoro TTS (82M) | first announcement; resident in voice-first mode | ladder, or voice-first off |
 
 ## Memory-pressure ladder (responds to `DISPATCH_SOURCE_TYPE_MEMORYPRESSURE`)
 
 1. **Warning:** shorten keep-warm timers; no new lazy spawns.
-2. **Critical:** drop GLiNER → drop escalation → drop pixel stack, in order. *Never* drop the resident set — that's the agent's competence.
+2. **Critical:** drop GLiNER → drop escalation → drop voice (STT/TTS — perception of the task outranks narration of it, §21) → drop pixel stack, in order. *Never* drop the resident set — that's the agent's competence. VAD + wake word (~5MB, in P1) survive all levels; only mic access closes if the user pauses Axiom.
 3. If escalation/pixel is needed while critical → unavailable → degrade: more budget-forcing on the pilot, lower ambition, or GATE ("need memory to continue well"). The agent never competes with the user's apps for RAM; its own lazy models are the only things it evicts.
 
 ## Compute contention & watchdog

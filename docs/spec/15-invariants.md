@@ -1,6 +1,6 @@
 # 15 — The invariants (constitution)
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 >
 > If an implementation choice contradicts an invariant, the invariant wins — change the code, or change the invariant *in an ADR*, never silently.
 
@@ -16,3 +16,5 @@
 - **I10** — Deterministic serialization: identical UI state ⇒ identical AXD bytes (cache correctness depends on it, so it's tested in CI).
 - **I11** — Passwords/secure-field contents never enter context, journal, or trajectories; entry is user-delegated.
 - **I12** — After any crash, the agent resumes to HALTED and lets the user decide; at-most-once actions with unknown outcome are surfaced as AMBIGUOUS, never re-fired.
+- **I13** — The presence overlay (§20) is display-only: click-through, capture-excluded, owned by the powerless process. It can never become an input or control surface.
+- **I14** — Voice (§21) is never a gate bypass: mic audio is never persisted, TTS never speaks secrets, and G2 approvals require physical/biometric confirmation.

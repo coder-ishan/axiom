@@ -1,6 +1,6 @@
 # 11 — Failure-mode taxonomy (per state, with responses)
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 | Where | Failure | Detection | Response |
 |---|---|---|---|

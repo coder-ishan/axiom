@@ -1,6 +1,6 @@
 # 13 — Test strategy per module
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 | Module | Tests |
 |---|---|

@@ -1,6 +1,6 @@
 # 00 — Overview: thesis, model roster, latency budget
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
 ## The thesis in one sentence
 
@@ -29,13 +29,17 @@ macOS is the one platform where the agent can skip all of it: the Accessibility 
 | **Executor (action emitter)** | fine-tuned 270M-class (FunctionGemma recipe) | 0.27B | ~0.16GB | Yes | Pilot's decision → strict tool-call JSON; re-formats failed calls |
 | **Router** | fine-tuned DistilBERT (66M) | 0.07B | ~0.03GB | Yes | AX-sufficiency check: {use AX, need pixels, escalate} — ~10ms |
 | **Embedder** | all-MiniLM-L6-v2 | 0.02B | ~0.03GB | Yes | Element search ("the send button") over the AX tree; trajectory memory |
+| **VAD** | Silero VAD | ~0.001B | ~2MB | Yes | Speech-activity detection; wakes the voice stack (§21) |
+| **Wake word** | openWakeWord | ~0.002B | ~2MB | Yes | "Hey Axiom" |
+| STT (voice lane) | Parakeet 0.6B | 0.6B | ~0.63GB | voice-first: Yes | Dictation, corrections; beats Whisper large-v3 |
+| TTS (voice lane) | Kokoro-82M | 0.08B | ~0.16GB | voice-first: Yes | Gate read-backs, status announcements |
 | Grounding (pixel fallback) | Holo1.5-3B | 3B | ~1.9GB | **LAZY** | Coordinate grounding on screenshots when AX is unusable |
 | Guardrail (optional) | GLiNER 0.3B (PII) — regex first | 0.3B | ~0.16GB | **LAZY** | Redact before logging trajectories; flag sensitive actions |
 
 > [!IMPORTANT]
 > **Decision — perception.** AX-first by default, pixel stack as a lazy fallback. The pixel stack loads *only* when the AX tree for the frontmost app is empty/incomplete, and unloads after.
 >
-> **Decision — roster.** Resident ~1.9–2.3GB (pilot + draft + executor + router + embedder). Lazy: +2GB only when pixels are needed. Fits a 16GB Mac. Escalation: if the pilot's confidence is low (logit margin on the action token — cheap to compute), hand the step to a bigger model (Qwen3.5-9B, loaded on demand).
+> **Decision — roster.** Resident ~1.9–2.3GB (pilot + draft + executor + router + embedder; +5MB for the always-on voice trigger stack, §21). Lazy: +2GB only when pixels are needed, +~0.8GB when voice-first mode keeps STT/TTS resident. Fits a 16GB Mac. Escalation: if the pilot's confidence is low (logit margin on the action token — cheap to compute), hand the step to a bigger model (Qwen3.5-9B, loaded on demand).
 
 ## The loop at a glance
 
@@ -77,7 +81,7 @@ macOS is the one platform where the agent can skip all of it: the Accessibility 
 | 4 | URL schemes / `open` / Shortcuts | App launch, deep links, automations | Fastest path when it exists |
 
 > [!IMPORTANT]
-> **Decision — execution.** Prefer semantic actions (AX/AppleScript) over coordinate clicks; use CGEvents only with AX-supplied frames. Pixel-first agents must *predict* coordinates (error-prone); CURSOR's coordinates come from OS metadata (exact). See §05 for the dispatch-time checks that make even coordinate actions safe.
+> **Decision — execution.** Prefer semantic actions (AX/AppleScript) over coordinate clicks; use CGEvents only with AX-supplied frames. Pixel-first agents must *predict* coordinates (error-prone); Axiom's coordinates come from OS metadata (exact). See §05 for the dispatch-time checks that make even coordinate actions safe.
 
 ## Speed gates
 

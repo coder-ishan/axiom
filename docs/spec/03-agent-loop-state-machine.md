@@ -1,8 +1,8 @@
 # 03 — The agent loop as an explicit state machine
 
-> Part of the [CURSOR architecture spec](README.md).
+> Part of the [Axiom architecture spec](README.md).
 
-No ad-hoc loop. The agent is a state machine with named states, guarded transitions, per-state timeouts, and a persisted cursor. Every transition appends to the journal (§06), so any crash lands in a *known* state.
+No ad-hoc loop. The agent is a state machine with named states, guarded transitions, per-state timeouts, and a persisted step pointer. Every transition appends to the journal (§06), so any crash lands in a *known* state.
 
 ```text
                     goal
