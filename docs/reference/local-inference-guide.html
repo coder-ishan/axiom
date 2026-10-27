@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Local LLM Inference — The Complete Deep Dive</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg-alt: #161b22;
+    --bg-card: #1a2129;
+    --border: #2d333b;
+    --text: #d6deeb;
+    --text-dim: #8b98a5;
+    --accent: #58a6ff;
+    --accent2: #7ee787;
+    --accent3: #ffa657;
+    --accent4: #ff7b72;
+    --code-bg: #10151c;
+    --maxw: 880px;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.75;
+    font-size: 17px;
+  }
+  .layout { display: flex; max-width: 1400px; margin: 0 auto; }
+  nav#toc {
+    width: 300px;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    overflow-y: auto;
+    padding: 32px 20px;
+    border-right: 1px solid var(--border);
+    background: var(--bg-alt);
+    font-size: 14px;
+  }
+  nav#toc h3 { color: var(--text-dim); font-size: 12px; text-transform: uppercase; letter-spacing: 1.5px; margin: 24px 0 8px; }
+  nav#toc a { display: block; color: var(--text-dim); text-decoration: none; padding: 4px 10px; border-radius: 6px; border-left: 2px solid transparent; }
+  nav#toc a:hover { color: var(--accent); background: rgba(88,166,255,0.08); }
+  nav#toc a.top { color: var(--accent); font-weight: 600; margin-bottom: 8px; }
+  main {
+    margin-left: 300px;
+    padding: 48px 60px 120px;
+    max-width: var(--maxw);
+  }
+  @media (max-width: 1100px) {
+    nav#toc { display: none; }
+    main { margin-left: 0; padding: 24px 20px 80px; }
+  }
+  h1 { font-size: 40px; line-height: 1.2; margin: 0 0 8px; letter-spacing: -0.5px; }
+  h2 {
+    font-size: 30px; margin: 72px 0 16px; padding-top: 24px;
+    border-top: 1px solid var(--border); letter-spacing: -0.3px;
+  }
+  h2 .num { color: var(--accent3); font-variant-numeric: tabular-nums; margin-right: 12px; }
+  h3 { font-size: 21px; margin: 40px 0 12px; color: var(--accent2); }
+  h4 { font-size: 17px; margin: 28px 0 8px; color: var(--accent); }
+  p { margin: 14px 0; color: var(--text); }
+  .subtitle { color: var(--text-dim); font-size: 19px; margin-top: 8px; }
+  .meta { color: var(--text-dim); font-size: 14px; margin-top: 20px; }
+  strong { color: #fff; }
+  em { color: var(--text-dim); }
+  a { color: var(--accent); }
+  ul, ol { padding-left: 26px; }
+  li { margin: 8px 0; }
+  code {
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 0.85em;
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    padding: 2px 7px;
+    border-radius: 5px;
+    color: var(--accent2);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px 22px;
+    overflow-x: auto;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  pre code { background: none; border: none; padding: 0; color: var(--text); }
+  pre .c { color: var(--text-dim); font-style: italic; }
+  pre .k { color: var(--accent4); }
+  pre .s { color: var(--accent3); }
+  blockquote {
+    margin: 20px 0; padding: 14px 22px;
+    border-left: 3px solid var(--accent);
+    background: rgba(88,166,255,0.06);
+    border-radius: 0 10px 10px 0;
+    color: var(--text-dim);
+  }
+  blockquote p { margin: 6px 0; color: var(--text); }
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 22px 28px;
+    margin: 24px 0;
+  }
+  .card.tip { border-left: 3px solid var(--accent2); }
+  .card.warn { border-left: 3px solid var(--accent3); }
+  .card.key { border-left: 3px solid var(--accent); }
+  .card h4 { margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 15px; }
+  th { text-align: left; color: var(--text-dim); font-weight: 600; text-transform: uppercase; font-size: 12px; letter-spacing: 0.8px; }
+  th, td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  td:first-child { color: #fff; font-weight: 500; }
+  .math {
+    font-family: "SF Mono", Menlo, monospace;
+    background: var(--code-bg);
+    border: 1px dashed var(--border);
+    border-radius: 10px;
+    padding: 16px 22px;
+    margin: 18px 0;
+    color: var(--accent3);
+    font-size: 15px;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  .formula-inline { font-family: "SF Mono", Menlo, monospace; color: var(--accent3); font-size: 0.92em; }
+  .tag {
+    display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; padding: 3px 10px; border-radius: 999px; margin-right: 8px; vertical-align: middle;
+  }
+  .tag.blue { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .tag.green { background: rgba(126,231,135,0.15); color: var(--accent2); }
+  .tag.orange { background: rgba(255,166,87,0.15); color: var(--accent3); }
+  .tag.red { background: rgba(255,123,114,0.15); color: var(--accent4); }
+  .toc-hero {
+    background: linear-gradient(135deg, rgba(88,166,255,0.08), rgba(126,231,135,0.05));
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 36px 40px;
+    margin-bottom: 48px;
+  }
+  .diagram {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    margin: 20px 0;
+    font-family: "SF Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    overflow-x: auto;
+    white-space: pre;
+    color: var(--text-dim);
+  }
+  .diagram b { color: var(--accent2); font-weight: normal; }
+  .diagram .hl { color: var(--accent3); }
+  hr.thin { border: none; border-top: 1px solid var(--border); margin: 48px 0; }
+  .footer { color: var(--text-dim); font-size: 14px; margin-top: 80px; border-top: 1px solid var(--border); padding-top: 24px; }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav id="toc">
+  <a href="#top" class="top">↑ Local LLM Inference — The Complete Deep Dive</a>
+  <h3>Foundations</h3>
+  <a href="#ch1">1. What inference actually is</a>
+  <a href="#ch2">2. Prefill vs decode</a>
+  <a href="#ch3">3. The transformer forward pass</a>
+  <a href="#ch4">4. The arithmetic of speed</a>
+  <a href="#ch5">5. KV cache</a>
+  <h3>Hardware</h3>
+  <a href="#ch6">6. Apple Silicon anatomy</a>
+  <a href="#ch7">7. Unified memory</a>
+  <a href="#ch8">8. Metal & GPU compute</a>
+  <h3>Efficiency</h3>
+  <a href="#ch9">9. Quantization</a>
+  <a href="#ch10">10. Sampling</a>
+  <a href="#ch11">11. Speculative decoding</a>
+  <a href="#ch12">12. Batching, caching, MoE</a>
+  <a href="#ch12b">12b. Parallel &amp; byte-level tokenization</a>
+  <h3>Software</h3>
+  <a href="#ch13">13. The runtime landscape</a>
+  <a href="#ch14">14. MLX internals</a>
+  <a href="#ch15">15. llama.cpp internals</a>
+  <a href="#ch16">16. Benchmarking</a>
+  <h3>Frontier — October 2026</h3>
+  <a href="#ch17">17. M5, M6 &amp; Neural Accelerators</a>
+  <a href="#ch18">18. The 4-bit float war</a>
+  <a href="#ch19">19. Speculative decoding in 2026</a>
+  <a href="#ch20">20. Distributed Macs — RDMA</a>
+  <a href="#ch21">21. Models &amp; runtime news</a>
+  <a href="#ch21b">21b. The remaining headroom ledger</a>
+  <a href="#ch21c">21c. Micro-models: what 50MB buys</a>
+  <a href="#ch21d">21d. The model floor</a>
+  <a href="#ch21e">21e. Where small models win</a>
+  <a href="#ch21f">21f. Smallest image-understanding models</a>
+  <a href="#ch21g">21g. Smallest computer-use models</a>
+  <a href="#ch21h">21h. The specialist floor map</a>
+  <a href="#ch21i">21i. The 500 tok/s horizon</a>
+  <a href="#ch21j">21j. Diffusion language models</a>
+  <a href="#ch21k">21k. The missing-unlock audit</a>
+  <h3>Going further</h3>
+  <a href="#ch22">22. The optimization playbook</a>
+  <a href="#ch23">23. Beating MLX</a>
+  <a href="#ch24">24. Glossary</a>
+  <a href="#ch25">25. Reading list</a>
+</nav>
+<main id="top">
+
+<div class="toc-hero">
+  <h1>Local LLM Inference — The Complete Deep Dive</h1>
+  <p class="subtitle">Everything you need to understand how language models run on your Mac — from first principles to the frontier of optimization.</p>
+  <p class="meta">Written October 2026 · Assumes no prior knowledge · Read linearly or jump via the sidebar</p>
+</div>
+
+<div class="card key">
+  <h4>How to read this document</h4>
+  <p>Chapters 1–5 build the mental model of what happens when a model generates text. Chapters 6–8 cover the Mac hardware it runs on. Chapters 9–12 cover every efficiency technique. Chapters 13–16 cover real software and how to measure it. Chapters 17–18 are the payoff: a concrete playbook for building something faster than MLX. You can stop reading anywhere — each chapter stands alone — but the concepts stack.</p>
+</div>
+
+<!-- ============ CH 1 ============ -->
+<h2 id="ch1"><span class="num">01</span>What inference actually is</h2>
+
+<p>A large language model is, at its core, a very large mathematical function. You feed it a sequence of tokens (words or word-fragments encoded as integers), and it produces a probability distribution over what the <em>next</em> token should be. Inference is the act of running that function — repeatedly — to generate text.</p>
+
+<p>Three terms you'll see everywhere:</p>
+
+<ul>
+  <li><strong>Weights</strong> — the learned parameters of the model. For a 7-billion-parameter model, that's 7 billion floating-point numbers. These are <em>fixed</em> after training; inference never changes them (fine-tuning does, but that's a different activity).</li>
+  <li><strong>Token</strong> — a chunk of text. Common words are one token, rare words get split into pieces. Roughly 0.75 words per token for English, so ~750 tokens ≈ 500 words.</li>
+  <li><strong>Forward pass</strong> — one evaluation of the model. Feed in a sequence, get out a prediction for the next token.</li>
+</ul>
+
+<h3>The surprising fact: generation is a loop</h3>
+
+<p>LLMs generate <em>one token at a time</em>. To write a 500-word answer, the model runs its forward pass ~670 times in a row, each time appending the newly chosen token to the input and predicting the next one:</p>
+
+<div class="diagram"><span class="hl">Input:</span>  "The capital of France is"
+Run 1:    "The capital of France is <b>Paris</b>"
+Run 2:    "The capital of France is Paris <b>.</b>"
+Run 3:    "The capital of France is Paris. <b>\n</b>"
+...repeat hundreds of times...</div>
+
+<p>This single fact — <strong>generation is sequential, one token at a time, and each step depends on all previous ones</strong> — drives nearly every performance characteristic of local inference. You cannot parallelize the generation of one response, because token 42 depends on token 41.</p>
+
+<div class="card key">
+  <h4>Why this matters</h4>
+  <p>ChatGPT's speed feels "fast enough" because thousands of users' requests are batched together on datacenter GPUs, keeping the hardware busy. On your Mac, <em>you're the only user</em>, so the hardware is massively underutilized during decode. Almost all local-inference optimization is about accepting this and optimizing the sequential loop itself.</p>
+</div>
+
+<!-- ============ CH 2 ============ -->
+<h2 id="ch2"><span class="num">02</span>Prefill vs decode — the two phases</h2>
+
+<p>Inference has two completely different phases, with different bottlenecks. Confusing them is the #1 source of benchmark confusion.</p>
+
+<h3>Prefill (processing your prompt)</h3>
+<p>When you hit enter, the model processes <em>your entire prompt at once</em>. These tokens can be processed in parallel — the computation for token 5 doesn't need token 6's output. This makes prefill <strong>compute-bound</strong>: the GPU does huge batches of matrix multiplications and actually gets to use its raw FLOPS.</p>
+
+<p>Prefill speed is measured in tokens/second of <em>input</em> processing, and it's usually very fast — hundreds to thousands of tok/s. It's also called <strong>time-to-first-token (TTFT)</strong> from the user's perspective: the pause before the first word appears.</p>
+
+<h3>Decode (generating the response)</h3>
+<p>After prefill, the model generates its own output one token at a time. Each step processes a single token through all the layers. One token = one row-vector × huge weight matrices. This makes decode <strong>memory-bandwidth-bound</strong>, not compute-bound.</p>
+
+<div class="card warn">
+  <h4>The single most important asymmetry</h4>
+  <p>Prefill: <span class="formula-inline">GPU does math at full tilt, bandwidth idle</span>. Decode: <span class="formula-inline">GPU streams weights from memory, math units mostly idle</span>. They are different workloads wearing one API's trenchcoat. Optimizations that help one can hurt the other — e.g. heavy quantization barely hurts prefill (compute-bound anyway) but directly speeds decode (less to stream).</p>
+</div>
+
+<h3>Why decode is memory-bound (the roofline intuition)</h3>
+<p>To produce one token, the GPU must read <em>every weight in the model</em> once. For each weight it does roughly one multiply-accumulate operation. That's a terrible arithmetic-to-bytes ratio — 1 operation per 2 bytes (at 4-bit quantization) or 1 per 4 bytes (8-bit). GPUs are built for the opposite: thousands of operations per byte.</p>
+
+<p>The consequence:</p>
+
+<div class="math">decode speed ≈ memory bandwidth ÷ bytes of weights read per token
+
+Example: M4 Max, ~546 GB/s bandwidth
+         8B model at 4-bit ≈ 4.8 GB of weights
+
+  546 / 4.8 ≈ 113 tok/s  ← theoretical ceiling
+  Real runtimes: 60–85 tok/s  ← 60–75% of ceiling</div>
+
+<p>That's the whole game. Your Mac's decode speed is essentially "how fast can I stream the weights through the memory system." A 70B model is ~40GB at 4-bit, so the same M4 Max gives ~13 tok/s. The model size in GB <em>is</em> the speed, divided by bandwidth.</p>
+
+<blockquote><p><strong>Rule of thumb:</strong> tok/s ≈ (unified memory bandwidth in GB/s) ÷ (model size in GB, including KV overhead). Memorize this. It predicts performance better than any marketing claim.</p></blockquote>
+
+<!-- ============ CH 3 ============ -->
+<h2 id="ch3"><span class="num">03</span>The transformer forward pass</h2>
+
+<p>What actually happens to a token inside the model? A modern decoder-only transformer (GPT, Llama, Qwen, Mistral — they're all variations) does this:</p>
+
+<div class="diagram">token → [embedding lookup]           one row of a big table
+     → for each of N layers (e.g. 32):
+         → [RMSNorm]
+         → <span class="hl">[attention]</span>:  "what have I seen so far that matters?"
+         → [RMSNorm]
+         → <span class="hl">[MLP / feed-forward]</span>: "think about it locally"
+     → [final norm]
+     → [output head]              projects to vocabulary → logits → probabilities</div>
+
+<h3>Attention: the token reads its history</h3>
+<p>Attention lets the current token "look back" at every token before it and decide which ones are relevant. Mechanically: the token is converted into a <em>query</em> vector, which is compared against <em>key</em> vectors stored for every previous token. The result is a weighted mix of their <em>value</em> vectors. This is where "the model remembers your conversation" lives.</p>
+
+<p>Three vectors per token per layer — query (Q), key (K), value (V) — are the machinery. The K and V vectors of past tokens must be <em>stored</em> (that's the KV cache, chapter 5).</p>
+
+<h3>The MLP: where most parameters live</h3>
+<p>After attention, each token passes through a feed-forward network — two large matrix multiplications with an activation function between. Here's the budget shocker:</p>
+
+<div class="card">
+  <h4>Where the parameters actually are (7B model example)</h4>
+  <table>
+    <tr><th>Component</th><th>Share of params</th><th>What it does</th></tr>
+    <tr><td>MLP layers (all 32)</td><td>~66%</td><td>Per-token "thinking"</td></tr>
+    <tr><td>Attention projections</td><td>~8%</td><td>Q/K/V/O matrices</td></tr>
+    <tr><td>Embedding + output head</td><td>~26%</td><td>Vocabulary mapping</td></tr>
+  </table>
+  <p>Two-thirds of the model is MLP, and the whole thing gets streamed from memory <em>every single token</em>. That's why model size in GB predicts speed so directly.</p>
+</div>
+
+<h3>Grouped-query attention (GQA)</h3>
+<p>Modern models use fewer key/value heads than query heads (e.g. 8 KV heads for 32 query heads). This was invented specifically to shrink the KV cache — it's why a 7B model from 2024 uses ~4x less cache memory than GPT-2-style attention would. When comparing models for local use, KV-head count is a quiet spec that hugely affects long-context performance.</p>
+
+<!-- ============ CH 4 ============ -->
+<h2 id="ch4"><span class="num">04</span>The arithmetic of speed — what limits your Mac</h2>
+
+<p>Three limits, in order of which bites first:</p>
+
+<h3>1. Memory bandwidth (dominant during decode)</h3>
+<p>As established in chapter 2. Per-M-series-chip unified memory bandwidth:</p>
+
+<table>
+  <tr><th>Chip</th><th>Bandwidth</th><th>8B 4-bit decode ceiling</th></tr>
+  <tr><td>M1 / M2 (base)</td><td>~100 GB/s</td><td>~20 tok/s</td></tr>
+  <tr><td>M2 / M3 Pro</td><td>~150–200 GB/s</td><td>~30–40 tok/s</td></tr>
+  <tr><td>M3 Max</td><td>~400 GB/s</td><td>~80 tok/s</td></tr>
+  <tr><td>M4 Max</td><td>~546 GB/s</td><td>~110 tok/s</td></tr>
+  <tr><td>M5 (base, per Apple's claims)</td><td>~150+ GB/s</td><td>~30 tok/s</td></tr>
+</table>
+
+<p>Note that this is a <em>ceiling</em> — real engines hit 60–75% of it because of kernel overheads, cache pollution, and non-ideal memory access patterns. Closing that gap is chapter 18's territory.</p>
+
+<h3>2. Compute FLOPS (dominant during prefill & training)</h3>
+<p>Prefill and batched inference hit the GPU's math units. Apple GPUs are strong here — an M4 Max does on the order of 30–40 TFLOPS (fp16). During decode, nearly all of this goes unused, which is precisely the slack speculative decoding exploits (chapter 11).</p>
+
+<h3>3. Memory capacity (limits which model you can run at all)</h3>
+<p>Unified memory is shared between the OS, apps, GPU, and model. Practical rule: you can run a model if</p>
+
+<div class="math">model GB (at your quant) + KV cache GB + ~8 GB (system+apps) ≤ total RAM
+
+KV cache size =  2 × layers × kv_heads × head_dim × context × bytes
+                 (2 = K and V; bytes ≈ 0.5–1.0 with quantized cache)
+
+Example: Llama-3.1-8B, 32 layers, 8 kv heads, fp16 cache, 32k context:
+  2 × 32 × 8 × 128 × 32768 × 2 B  ≈  4.3 GB</div>
+
+<div class="card tip">
+  <h4>The 32GB vs 128GB question, answered by one number</h4>
+  <p>A 70B model at 4-bit needs ~40GB of weights. On a 32GB Mac: impossible. On a 128GB Mac: runs at ~10 tok/s with room for context. Capacity buys <em>capability</em>, bandwidth buys <em>speed</em>, and you can't trade one for the other.</p>
+</div>
+
+<h3>4. Thermal/power reality</h3>
+<p>MacBooks sustain far lower power than desktop GPUs (a laptop M-Max chip sustains maybe 60–80W under GPU load vs 300–450W for an RTX 4090). Sustained long generations can throttle slightly, and fans matter. For single-user decode this rarely matters (you're bandwidth-bound, not compute-bound), but long prefill jobs (RAG over huge documents) can thermal-trim on laptops.</p>
+
+<!-- ============ CH 5 ============ -->
+<h2 id="ch5"><span class="num">05</span>The KV cache — inference's hidden organ</h2>
+
+<p>Every token generated so far must keep its K and V vectors alive so future tokens can attend to it. That storage is the <strong>KV cache</strong>, and it is the second-largest consumer of memory after the weights — and during decode it's read <em>alongside</em> the weights every single step, so it eats the same precious bandwidth.</p>
+
+<h3>Why it grows quadratically-ish</h3>
+<p>Cache size is proportional to <span class="formula-inline">context length × layers × kv_heads × head_dim</span>. Double the context, double the cache. And the cost of attention itself grows with context too: each new token must compare against all stored ones.</p>
+
+<h3>The techniques built around it</h3>
+
+<ul>
+  <li><strong>Cache quantization</strong> — store K/V at 8-bit or even 4-bit instead of 16-bit. Nearly all runtimes support this; it halves/quarters cache memory with minimal quality loss. Flag names: <code>-ctk q8_0 -ctv q8_0</code> in llama.cpp, <code>kv_bits</code> in MLX.</li>
+  <li><strong>Prefix caching</strong> — if the start of your prompt is the same across calls (system prompt, pasted documents, an agent's transcript), the cache for that prefix can be <em>reused</em> instead of recomputed. This collapses TTFT dramatically — vllm-mlx measured 5.8x TTFT improvement on cache hits. This is why agent frameworks that "append to the same conversation" get faster over time.</li>
+  <li><strong>Sliding-window attention</strong> — some models (Mistral-family) only attend to the last N tokens at some layers, bounding cache size permanently.</li>
+  <li><strong>Cache eviction / paged attention</strong> — manage cache in fixed-size pages so it can grow without fragmentation, and evict cold pages under memory pressure (vLLM's invention, ported to Mac in vllm-mlx).</li>
+</ul>
+
+<div class="card warn">
+  <h4>The context-length trap</h4>
+  <p>A model advertised at "128k context" will often exceed your available memory at that length once the KV cache is included, and even if it fits, attention cost grows and decode slows. The honest usable context is: what fits in RAM <em>after</em> weights and OS, at a speed you tolerate.</p>
+</div>
+
+<!-- ============ CH 6 ============ -->
+<h2 id="ch6"><span class="num">06</span>Apple Silicon anatomy</h2>
+
+<p>An M-series chip is a <em>system on a chip</em>: CPU cores, GPU cores, memory controller, neural engine, caches — all one die, sharing one pool of RAM.</p>
+
+<div class="diagram">┌─────────────────────────────────────────────────┐
+│                   M4 Max SoC                     │
+│                                                  │
+│  ┌──────────┐  ┌───────────────┐  ┌──────────┐  │
+│  │ CPU      │  │      GPU      │  │  Neural  │  │
+│  │ 12 cores │  │  40 cores     │  │  Engine  │  │
+│  │ P + E    │  │  (SIMD units) │  │ (AMX/AE) │  │
+│  └────┬─────┘  └───────┬───────┘  └──────────┘  │
+│       │                │                         │
+│  ┌────┴────────────────┴─────────────────────┐  │
+│  │        SLC (system-level cache)            │  │
+│  ├────────────────────────────────────────────┤  │
+│  │        Memory controller                   │  │
+│  └────────────────────┬───────────────────────┘  │
+│                       │ unified bus               │
+│              ┌────────┴────────┐                  │
+│              │   LPDDR5 RAM    │  ← single pool   │
+│              │  (e.g. 128GB)   │                  │
+│              └─────────────────┘                  │
+└─────────────────────────────────────────────────┘</div>
+
+<h3>The parts that matter for LLM inference</h3>
+
+<ul>
+  <li><strong>The GPU</strong> does essentially all LLM math. Apple GPUs are tile-based, unified-memory designs — great at streaming large matrices from RAM, weaker at raw FP32 compute vs NVIDIA, but for bandwidth-bound decode that's irrelevant.</li>
+  <li><strong>The Neural Engine (ANE)</strong> is a separate accelerator. It's extremely fast for fixed-shape workloads (Core ML apps) but historically awkward for LLMs because generation has dynamic shapes and needs a live KV cache. Apple's own on-device Apple Intelligence models run on ANE, but open toolchains don't really support it. As of 2026: ignore ANE for local LLMs.</li>
+  <li><strong>The memory controller</strong> is the star. Bandwidth numbers in chapter 4 are what your decode speed literally is.</li>
+</ul>
+
+<h3>Why the chip generations matter less than you'd think</h3>
+<p>M1 → M4 improved compute a lot, but bandwidth much less (100 → 546 GB/s across the Max tier, and base chips went 68 → 120 GB/s). Since decode is bandwidth-bound, an M1 Max (400 GB/s) still runs a 7B model at speeds competitive with a base M4. <strong>Bandwidth tier (Base/Pro/Max/Ultra) predicts local LLM performance far better than chip generation.</strong></p>
+
+<!-- ============ CH 7 ============ -->
+<h2 id="ch7"><span class="num">07</span>Unified memory — the Mac's unfair advantage</h2>
+
+<p>On a PC with a discrete GPU, the model lives in system RAM and must be copied into VRAM; VRAM capacity (8–24GB consumer) is a hard wall. On a Mac, CPU and GPU address the <em>same</em> physical memory with no copy step. Consequences:</p>
+
+<ul>
+  <li><strong>The GPU can use nearly all your RAM.</strong> A 128GB Mac is a 96GB+ "GPU". No consumer card approaches that.</li>
+  <li><strong>Zero-copy loads.</strong> A memory-mapped model file becomes GPU-visible with no import step — instant startup, and models can be loaded on demand.</li>
+  <li><strong>One shared bus to optimize.</strong> The whole engineering game (chapters 14–18) is saturating this one bus.</li>
+</ul>
+
+<h3>The catch</h3>
+<p>Bandwidth is shared with everything else. A browser churning in the background measurably slows decode. Chrome using 20GB of your 64GB steals both capacity and bandwidth. Serious local-inference setups close their apps. Also, macOS historically wired a fraction of RAM for wired (non-pageable) GPU allocations; modern MLX/llama.cpp manage `iogpu.wired_limit` or equivalent to reclaim most of it — but leave headroom or the system will thrash and kill performance.</p>
+
+<blockquote><p><strong>Practical memory budget:</strong> total RAM − 10GB (system) − your apps = usable model+cache budget. 32GB Mac → ~20GB budget (8B/14B class). 64GB → ~50GB (35B MoE, 30B dense). 128GB → ~110GB (70B dense, 100B+ MoE).</p></blockquote>
+
+<!-- ============ CH 8 ============ -->
+<h2 id="ch8"><span class="num">08</span>Metal & GPU compute on macOS</h2>
+
+<p>Metal is Apple's GPU API — the layer between high-level runtimes (MLX, llama.cpp's backends) and the silicon. Understanding its shape explains where engine overheads come from:</p>
+
+<ul>
+  <li><strong>Command buffers & encoders</strong> — work is recorded into buffers and submitted to the GPU. Each recorded shader call has CPU-side overhead; hundreds of small kernels per token (as naive implementations produce) spend real time on launch overhead rather than math. Fusion (merging ops into fewer kernels) is a top optimization for exactly this reason.</li>
+  <li><strong>Shader compilation</strong> — Metal shaders compile to GPU code at runtime, with a small stutter on first use. Engines cache compiled kernels; aggressive engines pre-tune them per model (chapter 18).</li>
+  <li><strong>Threadgroup / SIMD shape</strong> — Apple GPUs execute in 32-wide SIMD groups within threadgroups; matrix kernels tuned to this shape (as MLX's are) run much faster than naive ports.</li>
+  <li><strong>Unified memory addresses</strong> — GPU kernels read the same virtual addresses as the CPU; no staging buffers, no copies. llama.cpp's Metal backend actually pays a small overhead emulating its CPU-oriented memory model, while MLX was designed around this hardware — a key reason MLX is faster (chapter 13).</li>
+</ul>
+
+<div class="card">
+  <h4>Metal vs CUDA, honestly</h4>
+  <p>CUDA has 18 years of kernel libraries, autotuning infrastructure, and community knowledge. Metal has fewer battle-tested primitives but one giant advantage: zero-copy access to 128GB of RAM. For bandwidth-bound single-stream decode, Apple's design is genuinely competitive — and less explored, meaning more room for new work (your motivation, presumably).</p>
+</div>
+
+<!-- ============ CH 9 ============ -->
+<h2 id="ch9"><span class="num">09</span>Quantization — shrinking the weights</h2>
+
+<p>Weights are trained at 16-bit precision (fp16/bf16). Quantization stores them at lower precision. Since decode speed = bandwidth ÷ bytes, halving bytes directly doubles decode speed. This is the biggest lever you control.</p>
+
+<h3>How it works</h3>
+<p>Take a group of weights (e.g. 32 numbers), record the group's min/max or a scale factor, then store only small integers (4 bits → 16 possible values) plus the shared scale. Dequantize on the fly during compute. Modern schemes add small correction blocks (GGUF's <em>super-blocks</em>, e.g. Q4_K_M uses 6-bit scales for its 4-bit values) to preserve accuracy.</p>
+
+<h3>The formats you'll encounter</h3>
+
+<table>
+  <tr><th>Format</th><th>Bits/weight</th><th>7B model size</th><th>Notes</th></tr>
+  <tr><td>FP16 / BF16</td><td>16</td><td>~14 GB</td><td>Full precision; rarely worth it locally</td></tr>
+  <tr><td>Q8_0 / int8</td><td>8.5</td><td>~7.5 GB</td><td>Visually lossless</td></tr>
+  <tr><td><b>Q4_K_M / int4</b></td><td>~4.8</td><td>~4.4 GB</td><td><b>The sweet spot</b> — ~3% quality drop, ~75% smaller</td></tr>
+  <tr><td>Q3_K_M</td><td>~3.9</td><td>~3.3 GB</td><td>Noticeable degradation on hard tasks</td></tr>
+  <tr><td>Q2_K</td><td>~3.0</td><td>~2.7 GB</td><td>Last resort; models get "weird"</td></tr>
+  <tr><td>NVFP4 (newer)</td><td>4</td><td>~3.7 GB</td><td>Hardware-friendly 4-bit layout, strong quality at this size</td></tr>
+</table>
+
+<h3>Rules that hold up in practice</h3>
+
+<ul>
+  <li><strong>Q4-ish is the default choice.</strong> Quality loss ~3%, speed ~2x vs fp16. Below Q4, quality falls off a cliff; above Q5, you pay for precision you can't perceive.</li>
+  <li><strong>Prefer a bigger model at Q4 over a smaller model at Q8.</strong> A 14B at Q4 beats an 8B at Q8 on almost every task, at the same memory cost (~8GB either way).</li>
+  <li><strong>MoE models tolerate quantization better</strong> — sparse routing means any individual weight matters less.</li>
+  <li><strong>Never quantize embeddings/output head aggressively</strong> — they touch the whole vocabulary; most formats keep these at higher precision.</li>
+</ul>
+
+<div class="card tip">
+  <h4>Choosing your model size in one step</h4>
+  <p>Take your RAM budget (chapter 7). Model at 4-bit should be ≤ budget − KV cache for your context length. Then pick the <em>largest quality model that fits</em>, because at 4-bit, decode speed is inversely proportional to size and there's no way around that tradeoff. Speed per token is fixed by size; the only free speedups are quantization (already spent), speculation (chapter 11), and a faster engine (chapter 18).</p>
+</div>
+
+<!-- ============ CH 10 ============ -->
+<h2 id="ch10"><span class="num">10</span>Sampling — turning logits into tokens</h2>
+
+<p>The model outputs a probability for each of ~100k–200k vocabulary entries. Sampling chooses which one to take. It's negligible compute, but it shapes output quality, so know the knobs:</p>
+
+<table>
+  <tr><th>Parameter</th><th>What it does</th><th>Sensible default</th></tr>
+  <tr><td>temperature</td><td>Scales the distribution; low = deterministic, high = creative</td><td>0.7 (chat), 0–0.2 (code/facts)</td></tr>
+  <tr><td>top_p (nucleus)</td><td>Keep only the most probable tokens summing to p</td><td>0.9</td></tr>
+  <tr><td>top_k</td><td>Keep only the k most likely tokens</td><td>40–50 (or skip if using top_p)</td></tr>
+  <tr><td>repeat penalty</td><td>Discourages repeating recent tokens</td><td>1.05–1.1, only if needed</td></tr>
+</table>
+
+<p>One relevant performance note: the <strong>output head</strong> (the final matrix projecting to vocabulary size) is expensive for large vocabularies — it's a 1×V multiplication against a huge matrix every step. Engines with fused/delayed output-head kernels or sampled-every-k optimizations save real bandwidth, and it's another place where engines differ.</p>
+
+<!-- ============ CH 11 ============ -->
+<h2 id="ch11"><span class="num">11</span>Speculative decoding — the near-free lunch</h2>
+
+<p>The core insight: during decode your GPU is bandwidth-bound, with math units mostly idle. Speculative decoding spends that idle compute to <strong>amortize the bandwidth cost across several tokens</strong>.</p>
+
+<h3>How it works</h3>
+
+<div class="diagram"><span class="hl">Draft phase:</span> a small "draft" model (e.g. 1B) guesses the next k=5 tokens
+           ↓ cheap: 5 tiny forward passes
+<span class="hl">Verify phase:</span> the big model checks all 5 guesses in ONE pass
+           ↓ costs same bandwidth as generating 1 token
+<span class="hl">Accept phase:</span> keep longest matching prefix + 1 corrected token
+
+Worst case: 1 token for 1 big pass   (no loss)
+Best case:  6 tokens for 1 big pass  (6x speedup on that step)
+Typical:    ~2–3x overall</div>
+
+<p>Verification is cheap because the big model can score k future positions <em>in parallel</em> in one forward pass (prefill-style, compute-bound, using idle math units). The draft model is so small its passes cost almost nothing.</p>
+
+<h3>Variants you should know</h3>
+
+<ul>
+  <li><strong>Classic two-model</strong> — small draft + big verifier. Requires a matched pair sharing a vocabulary.</li>
+  <li><strong>Self-speculation / Medusa-style</strong> — the big model has extra small heads that predict several tokens ahead from its own hidden state. No second model needed.</li>
+  <li><strong>Draft-tree speculation</strong> — draft a tree of candidate continuations, verify as a batch. More acceptance, more complexity.</li>
+  <li><strong>Sparse self-speculative decoding</strong> (2026 research) — use a subset of the model's own layers as the "draft" path. Very promising on memory-constrained Macs since there's no extra model resident.</li>
+</ul>
+
+<div class="card key">
+  <h4>Why this is the biggest untapped local win</h4>
+  <p>Speculation gives ~2–3x on decode, composes with quantization (draft model can be tiny at 4-bit), and is nearly free in hardware terms — yet most casual local users never enable it, and most engines implement it poorly. An engine <em>architected around</em> speculation (co-resident draft, automatic draft selection, tree verification) is a legitimate way to beat the default experience. The catch: it helps most when the draft and main model "think alike" — acceptance rate depends on task; expect ~50–70% acceptance for well-matched pairs.</p>
+</div>
+
+<!-- ============ CH 12 ============ -->
+<h2 id="ch12"><span class="num">12</span>Batching, prefix caching, MoE & friends</h2>
+
+<h3>Continuous batching</h3>
+<p>Serving many users? Interleave: as one request finishes prefill, slot another in; decode steps of different sequences proceed together. One batched decode pass streams weights <em>once</em> for all sequences — serving 10 users costs barely more bandwidth than serving 1. This is how datacenters get throughput. <em>For a single local user it's irrelevant</em> — but if you build serving infrastructure (agent swarms, app backends), batching on Mac with vllm-mlx is genuinely effective; the EuroMLSys 2026 paper measured 21–87% throughput gains over llama.cpp from batching + caching alone.</p>
+
+<h3>Prefix caching</h3>
+<p>Discussed in chapter 5; reiterating because agents make this matter: every time your coding agent appends to the same conversation, only the <em>new</em> suffix needs processing. Engines that detect and reuse shared prefixes turn multi-minute agent turns into near-instant starts. When choosing an engine, ask: "does it persist KV across requests with matching prefixes?"</p>
+
+<h3>Mixture-of-Experts (MoE)</h3>
+<p>MoE models (Mixtral, DeepSeek, Qwen3-35B-A3B, gpt-oss) contain many expert MLPs but route each token through only 1–2. Parameter count is huge (35B) but <em>active</em> params per token are small (3B). Effect on Mac: MoE decode speed tracks the <em>active</em> parameter bytes, so a 35B-A3B at 4-bit (~18GB) decodes at 3B-model speed (~2.5–3GB streamed/token → 40+ tok/s on Pro chips) while thinking like a 35B. The cost: all experts must fit in RAM. MoE is arguably <em>the</em> local-model architecture of 2025–26 because it converts capacity into quality without paying bandwidth for it.</p>
+
+<h3>Attention optimizations</h3>
+<ul>
+  <li><strong>FlashAttention</strong> — computes attention without materializing the full attention matrix, keeping tiles in GPU registers. Big memory savings at long context; both MLX and llama.cpp implement variants.</li>
+  <li><strong>Sliding window / interleaved local attention</strong> — architectural, bounds attention cost for long contexts (chapter 5).</li>
+  <li><strong>GQA</strong> — architectural, shrinks cache (chapter 3).</li>
+</ul>
+
+<!-- ============ CH 12b ============ -->
+<h2 id="ch12b"><span class="num">12b</span>Parallel &amp; byte-level tokenization</h2>
+
+<p>One "everything else" topic deserves its own chapter: the tokenizer itself. It's invisible in every benchmark because it doesn't touch decode — but at long contexts it quietly dominates time-to-first-token, and there's an active research wave attacking its sequential nature.</p>
+
+<h3>First, why this doesn't affect decode</h3>
+<p>During decode, tokens already exist as integers; the model emits an id, and incremental detokenization (id → text fragment) is microseconds. Decode performance is untouched by tokenizer design. The problem is <strong>prefill</strong>: BPE tokenization is left-to-right greedy longest-match against a merge table — inherently sequential, single-core. Tokenizing a 4MB document takes ~0.8s with the Llama 3 tokenizer; for an agent re-ingesting a 200k-token transcript each turn, that's 100ms–1s of pure TTFT overhead, paid <em>every turn</em>.</p>
+
+<div class="card warn">
+  <h4>Priority check</h4>
+  <p>Chat with short prompts: tokenizer cost ≈ nothing. Agents/RAG with long contexts: tokenization can be 10–50% of TTFT. It's a real win for the agent-workload engine — but it comes <em>after</em> the decode-kernel work, which is where the 2x lives.</p>
+</div>
+
+<h3>Thread 1 — Parallel tokenization (keep BPE, remove the scan)</h3>
+<ul>
+  <li><strong>LoPT</strong> (ACL 2026) — lossless parallel tokenization. Chunk the text, tokenize chunks concurrently, then fix the one thing that can differ: a chunk boundary can split a potential merge. LoPT repairs boundaries via character-position-based token merging + dynamic chunk-length adjustment. Output is bit-identical to serial tokenization; several times faster.</li>
+  <li><strong>ParallelTokenizer</strong> (OpenLLMab, 2024) and Charles Xu's <strong>5.5x faster HF tokenizers</strong> — segment text at <em>byte-safe</em> boundaries: a cut is safe if the byte before it maps to itself, so no normalizer offset can lag across the boundary. Word ids are rebased per segment; post-processing runs once on the concatenation.</li>
+  <li>The transferable insight: <strong>chunk boundaries are safe only at byte-self-mapping positions</strong>. Get that check right and parallel tokenization is lossless, trivially — and embarrassingly parallel (you could even run it on the GPU that's otherwise idle during prefill).</li>
+</ul>
+
+<h3>Thread 2 — Tokenizer-free / byte-level models</h3>
+<ul>
+  <li><strong>Byte Latent Transformer</strong> (Meta, 2024) — dynamic byte patches, no vocabulary at all.</li>
+  <li><strong>MambaByte</strong> (2024) — bytes at sequence-model scale via state-space models, avoiding the quadratic attention that historically forced tokenization onto transformers.</li>
+  <li><strong>H-Net / Bolmo</strong> (2025–26) — the model learns its own chunk boundaries (dynamic chunking); non-causal one-byte-lookahead routers recover near-perfect alignment to classic token boundaries.</li>
+  <li><strong>zip2zip</strong> (2025) — adaptively merges tokens based on context; <strong>MrT</strong> — soft gating to shorten sequences at inference.</li>
+</ul>
+<p>Status check (Nature, 2026): byte-level LLMs still haven't displaced subword tokenization in any leading model — the efficiency–quality Pareto frontier hasn't tipped. But it's no longer fringe.</p>
+
+<h3>Thread 3 — The sleeper connection: byte interfaces × speculative decoding</h3>
+<p>This is the one that matters for an engine that beats MLX. Classic speculative decoding requires the draft model and verifier to <strong>share a vocabulary</strong> — which locks you into matched model pairs. Byte-level output interfaces change that:</p>
+<ul>
+  <li><strong>Byte-Level Distillation (BLD)</strong> — converts a teacher's token distribution to byte probabilities (Vieira et al., 2025 approximation) and attaches a byte-level decoder head to the student. Distillation across incompatible vocabularies, no alignment heuristics.</li>
+  <li><strong>ByteSampler</strong> (2025) — derives byte-level output distributions from <em>any</em> token LLM at inference, without retraining.</li>
+</ul>
+<p>The implication: a byte interface could let you pair <em>any</em> small draft model with <em>any</em> large verifier regardless of tokenizer — unlocking draft/verify combinations that vocabulary matching forbids. That's a speculative-decoding moat, on top of the 2–3x the technique already gives (chapter 11).</p>
+
+<div class="card key">
+  <h4>Where this fits in the engine roadmap</h4>
+  <p>Phase 4½ material: parallel tokenization (LoPT-style, GPU-parallel) for fast agent prefill, and a byte-level output interface to make speculative decoding tokenizer-agnostic. Both attack TTFT/agent latency — the same metric as prefix caching — rather than decode bandwidth.</p>
+</div>
+
+<!-- ============ CH 13 ============ -->
+<h2 id="ch13"><span class="num">13</span>The runtime landscape (2026)</h2>
+
+<h3>The family tree</h3>
+<div class="diagram">Metal API
+ ├─ <span class="hl">MLX</span> (Apple's array framework) ── mlx-lm ── vllm-mlx ── Ollama(0.19+ MLX mode)
+ └─ <span class="hl">llama.cpp</span> (GGML) ──────────── llama-cli ── Ollama (legacy backend)
+                                     ── LM Studio (both backends!)
+                                     ── llamafile, Jan, many GUIs</div>
+
+<h3>MLX</h3>
+<p>Apple's ML framework for Apple Silicon. NumPy-like API, lazy evaluation, fused ops, designed around unified memory. <strong>Fastest general decode on Apple Silicon</strong> for supported models — benchmarks from 2025–2026 consistently show it 15–87% faster than llama.cpp-derived runtimes depending on model and prompt length. Also does LoRA fine-tuning on-device. Ecosystem: <code>mlx-community</code> on HuggingFace (thousands of pre-converted models). Limits: macOS-only, MLX format models, more DIY than Ollama.</p>
+
+<h3>llama.cpp</h3>
+<p>The cross-platform workhorse. GGUF model format, runs on CPU, Metal, CUDA, Vulkan, phones… It has the largest model compatibility (any new model works day one), the most tooling, and the most configuration surface. Slower than MLX on Mac for decode because its Metal backend carries design decisions made for portability. But it's the reference implementation of the whole local ecosystem.</p>
+
+<h3>Ollama</h3>
+<p>The UX layer: `ollama run llama3` and you're going. Since 0.19 (March 2026) it ships an MLX backend for Apple Silicon, roughly doubling throughput vs its llama.cpp path (measured: prefill 1,154→1,810 tok/s, decode 58→134 tok/s on a 35B-A3B at int4, M5 Max). Best default for beginners; slightly behind bleeding-edge MLX features.</p>
+
+<h3>LM Studio</h3>
+<p>Polished GUI, runs <em>both</em> llama.cpp and MLX backends and picks per model. Great model browser. Good for people who want results without terminals.</p>
+
+<h3>vllm-mlx</h3>
+<p>Serving-grade MLX: continuous batching, paged KV, prefix caching, OpenAI-compatible server. The throughput king for multi-request workloads (agents, apps). The 2026 paper benchmarking it found it consistently 21–87% above llama.cpp.</p>
+
+<h3>Others worth knowing</h3>
+<ul>
+  <li><strong>MLC-LLM</strong> — machine-learning-compiled kernels; competitive, strong on cross-platform, quieter community.</li>
+  <li><strong>tinygrad</strong> — minimal deep-learning framework; its ahead-of-time tuned kernels on NVIDIA beat everyone; conceptually the model for chapter 18.</li>
+  <li><strong>Core ML / ANE paths</strong> — Apple-ecosystem app deployment; not competitive for general LLM inference in open tooling yet.</li>
+</ul>
+
+<h3>Decision table</h3>
+<table>
+  <tr><th>You want…</th><th>Use</th></tr>
+  <tr><td>Fastest single-stream decode, scriptable</td><td>mlx-lm</td></tr>
+  <tr><td>Fastest + serve an app/agents (OpenAI-compatible)</td><td>vllm-mlx</td></tr>
+  <tr><td>One command, works out of the box</td><td>Ollama 0.19+ (MLX backend)</td></tr>
+  <tr><td>GUI, model browsing, comparisons</td><td>LM Studio</td></tr>
+  <tr><td>Brand-new model day one, max format compatibility</td><td>llama.cpp (GGUF)</td></tr>
+  <tr><td>Fine-tune on your Mac</td><td>MLX LoRA</td></tr>
+</table>
+
+<!-- ============ CH 14 ============ -->
+<h2 id="ch14"><span class="num">14</span>MLX internals — why it wins</h2>
+
+<p>Three design choices explain MLX's speed on Apple Silicon:</p>
+
+<ol>
+  <li><strong>Lazy evaluation with graph fusion.</strong> MLX doesn't execute ops as you call them; it builds a graph, then runs it — and can fuse consecutive elementwise ops (norms, activations, residuals) into single kernels. Fewer kernels = less Metal launch overhead = higher fraction of time spent reading weights (which is what decode needs).</li>
+  <li><strong>Unified-memory-native layouts.</strong> Tensors are allocated in shared memory from the start. No CPU↔GPU staging, no copies at boundaries. llama.cpp must bridge its CPU-centric memory model to Metal; MLX never had the seam.</li>
+  <li><strong>Hand-tuned Apple-GPU kernels</strong> for the hot ops: GEMV/GEMM (matmuls), quantized dequant-matmul fusion, attention. The quantized-matmul kernels in particular dequantize <em>inside</em> the matmul kernel, avoiding a separate pass over weights.</li>
+</ol>
+
+<h3>What it looks like to use</h3>
+
+<pre><code><span class="c"># install</span>
+pip install mlx-lm
+
+<span class="c"># one-shot generation</span>
+python -m mlx_lm.generate \
+  --model mlx-community/Qwen3-8B-4bit \
+  --prompt "Explain speculative decoding briefly." \
+  --max-tokens 200
+
+<span class="c"># an OpenAI-compatible local server</span>
+python -m mlx_lm.server --model mlx-community/Qwen3-8B-4bit --port 8080
+
+<span class="c"># LoRA fine-tune on your own data, on the Mac</span>
+python -m mlx_lm lora --train data.jsonl \
+  --model mlx-community/Qwen3-8B-4bit</code></pre>
+
+<h3>Where MLX is weak</h3>
+<ul>
+  <li><strong>General-purpose kernels.</strong> Its kernels fit all shapes and models; they are not auto-tuned to your specific chip + model + workload (more in ch. 18).</li>
+  <li><strong>Decode is still ~60–75% of bandwidth ceiling</strong> — kernel launch overhead and imperfect weight-streaming schedules remain.</li>
+  <li><strong>Speculative decoding exists but isn't first-class</strong> — no automatic draft-model management, limited tree speculation.</li>
+  <li><strong>Serving features</strong> (batching, paging) arrived only via the vllm-mlx layer, not core MLX.</li>
+</ul>
+
+<!-- ============ CH 15 ============ -->
+<h2 id="ch15"><span class="num">15</span>llama.cpp internals — the reference engine</h2>
+
+<p>Even if you never run it, understand it — the whole ecosystem's vocabulary (GGUF, -ngl, Q4_K_M) is llama.cpp's.</p>
+
+<h3>Architecture</h3>
+<ul>
+  <li><strong>GGML</strong> — the tensor library underneath: quantization formats, SIMD/CUDA/Metal backends, graph execution.</li>
+  <li><strong>GGUF</strong> — the single-file model container: weights + tokenizer + metadata in one mmap-able file. mmap means the OS pages weights in on demand — instant startup even for huge models.</li>
+  <li><strong>The graph</strong> — each forward pass builds an explicit computation graph, then executes kernel-by-kernel. Less fusion opportunity than MLX's lazy approach; more portability.</li>
+</ul>
+
+<h3>The flags that matter</h3>
+
+<pre><code>llama-server -m model.gguf \
+  -ngl 999          <span class="c"># offload ALL layers to GPU (the flag everyone forgets)</span>
+  --flash-attn      <span class="c"># fused attention: big win at long context</span>
+  -c 8192           <span class="c"># context size — set to what you NEED; KV cache eats bandwidth</span>
+  -ctk q8_0 -ctv q8_0  <span class="c"># quantize the KV cache (halves its bandwidth+memory)</span>
+  --mlock           <span class="c"># pin weights in RAM, avoid paging</span>
+  --parallel 1      <span class="c"># raise only if serving multiple users</span></code></pre>
+
+<div class="card warn">
+  <h4>Common self-inflicted wounds</h4>
+  <ul>
+    <li>Forgetting <code>-ngl</code> and running on CPU (speed: ~1/10th).</li>
+    <li>Setting context to 128k "to be safe" — silently consumes 10s of GB and slows every token.</li>
+    <li>Leaving fp16 KV cache at long contexts when q8 costs nothing in quality.</li>
+    <li>Judging quant quality from one cherry-picked answer — use perplexity on a real corpus or a task suite you care about.</li>
+  </ul>
+</div>
+
+<!-- ============ CH 16 ============ -->
+<h2 id="ch16"><span class="num">16</span>Benchmarking — how to measure honestly</h2>
+
+<p>Vendor numbers are run in fat-pipe conditions. Here's how to measure your own setup so results mean something.</p>
+
+<h3>Metric definitions</h3>
+<table>
+  <tr><th>Metric</th><th>Meaning</th><th>Who cares</th></tr>
+  <tr><td>TTFT</td><td>Seconds until first token</td><td>Chat UX, agents</td></tr>
+  <tr><td>Decode tok/s</td><td>Sustained generation rate mid-answer</td><td>Everything</td></tr>
+  <tr><td>Prefill tok/s</td><td>Prompt-processing rate</td><td>RAG, long docs, agents</td></tr>
+  <tr><td>Throughput (aggregate)</td><td>Total tok/s across concurrent requests</td><td>Serving many users</td></tr>
+</table>
+
+<h3>Methodology rules</h3>
+<ol>
+  <li><strong>Fix everything but the variable.</strong> Same model file, same context, same quant, same prompt set. Change one thing.</li>
+  <li><strong>Warm up.</strong> First run includes shader compilation and cache cold-start; discard or average after warmup.</li>
+  <li><strong>Measure mid-generation, not averaged-with-prefill.</strong> A long prefill destroys decode averages.</li>
+  <li><strong>Use realistic prompts.</strong> 2000-token agent-style prompts behave differently from "hello". Prompt length changes which phase dominates.</li>
+  <li><strong>Repeat ≥3, report median.</strong> macOS background tasks inject noise.</li>
+  <li><strong>Log memory pressure.</strong> If macOS shows swap or pressure warnings, your numbers are lies.</li>
+</ol>
+
+<h3>Quick harness you can run today</h3>
+
+<pre><code><span class="c"># llama.cpp's built-in bench (mid-range, honest numbers)</span>
+llama-bench -m model.gguf -ngl 99 -p 512 -n 128
+
+<span class="c"># mlx-lm: generates and prints tok/s</span>
+python -m mlx_lm.generate --model m --prompt "..." --max-tokens 256
+
+<span class="c"># crude but universal: time N tokens</span>
+time (curl -s localhost:8080/v1/completions -d '{"prompt":"hi","max_tokens":128}' &gt; /dev/null)
+<span class="c"># tok/s ≈ 128 / (elapsed - TTFT)</span></code></pre>
+
+<h3>Sanity anchor numbers (mid-2026, 4-bit, single user)</h3>
+<table>
+  <tr><th>Chip</th><th>7–8B</th><th>14B</th><th>35B MoE (A3B)</th></tr>
+  <tr><td>M2 base</td><td>~12–15</td><td>~7–8</td><td>~18–20</td></tr>
+  <tr><td>M3 Pro</td><td>~20–25</td><td>~11–13</td><td>~30–35</td></tr>
+  <tr><td>M4 Max</td><td>~60–80</td><td>~35–45</td><td>~90–110</td></tr>
+  <tr><td>M5 Max (with MLX)</td><td>~90–120</td><td>~50–60</td><td>~120–140</td></tr>
+</table>
+<p><em>If your numbers are way below these, something's wrong — check chapter 15's flag list.</em></p>
+
+<!-- ============ CH 17 (frontier) ============ -->
+<h2 id="ch17"><span class="num">17</span>Frontier: M5, M6 &amp; Neural Accelerators</h2>
+
+<p class="meta">Updated for the October 2026 hardware landscape.</p>
+
+<h3>The M5 generation (2025–26): matrix units inside the GPU</h3>
+<p>The M5's headline change for inference is not bandwidth — it's that every GPU core now contains <strong>Neural Accelerators</strong>: dedicated matrix units optimized for low-precision math (FP16/BF16, and crucially 4-bit float formats). Apple's own MLX benchmarks (prompt size 4096) show what this buys:</p>
+
+<table>
+  <tr><th>Model (MLX)</th><th>TTFT speedup (vs M4)</th><th>Decode speedup</th></tr>
+  <tr><td>Qwen3-8B 4-bit</td><td>3.97×</td><td>1.24×</td></tr>
+  <tr><td>Qwen3-14B 4-bit</td><td>4.06×</td><td>1.19×</td></tr>
+  <tr><td>Qwen3-30B-A3B 4-bit (MoE)</td><td>3.52×</td><td>1.25×</td></tr>
+  <tr><td>gpt-oss-20b (native MXFP4)</td><td>3.33×</td><td>1.24×</td></tr>
+</table>
+
+<div class="card key">
+  <h4>Read those two columns correctly</h4>
+  <p>TTFT (prefill) is ~3.3–4x faster because prefill is <strong>compute-bound</strong> and the new matrix units raise compute. Decode is only ~1.2x faster because decode is <strong>bandwidth-bound</strong> — and M5 Max's bandwidth rose only 546 → 614 GB/s (+12%, almost exactly matching the 1.19–1.24x decode gain). This is chapter 4's roofline playing out in vendor benchmarks. Any engine that could use those matrix units for <em>decode-side</em> work (fused dequant-matmul kernels at 4-bit float precision) has unexploited headroom — the hardware now does 4-bit float math natively, but decode is still gated by streaming bytes.</p>
+</div>
+
+<h3>The chip / machine table (October 2026)</h3>
+<table>
+  <tr><th>Chip / machine</th><th>Bandwidth</th><th>Max RAM</th><th>~8B Q4 decode</th><th>What it means</th></tr>
+  <tr><td>M5 base</td><td>~150 GB/s</td><td>32 GB</td><td>~25–30 tok/s</td><td>Casual local AI</td></tr>
+  <tr><td>M6 (Mac mini, Aug 2026)</td><td>~170 GB/s</td><td>32 GB</td><td>~28–32 tok/s</td><td>Best cheap entry; no independent benchmarks yet</td></tr>
+  <tr><td>M5 Pro</td><td>~307 GB/s</td><td>64 GB</td><td>~50–60 tok/s</td><td>Best value tier; 34B-class models</td></tr>
+  <tr><td>M5 Max</td><td>~614 GB/s</td><td>128 GB</td><td>~100–130 tok/s</td><td>Fastest laptop chip; ~136 tok/s on 8B Q4, 16 tok/s on 70B Q4</td></tr>
+  <tr><td>M5 Ultra (Mac Studio, Sept 2026)</td><td>~1,228 GB/s</td><td>256 GB (512 GB config shipping late Oct 2026)</td><td>~200+ tok/s</td><td>The reference local-inference machine: 70B at FP16, 120B+ Q4, 1.58× faster decode than M3 Ultra and 4.4× faster TTFT (measured, Oct 15 2026)</td></tr>
+</table>
+
+<blockquote><p><strong>Bandwidth still rules:</strong> the HN consensus on M5 was right — "memory bandwidth barely moved, so decode barely moves." The M5's 4× gains are TTFT/prefill. If you buy for <em>decode speed</em>, you're buying the Max/Ultra tier, not the generation. And note the DRAM-supply wrinkle reported in 2026: the 512GB M5 Ultra config may be supply-constrained into 2027 because LPDDR is scarce industry-wide.</p></blockquote>
+
+<h3>The ANE question, settled (for now)</h3>
+<p>A common 2026 question: "why don't runtimes use the Apple Neural Engine?" The answer (Contra Collective's M5 Max teardown): the ANE executes <strong>compiled, fixed-shape graphs</strong> and has no practical mechanism for a live, growing KV cache or dynamic sequence shapes — which is what generation fundamentally is. Apple's own on-device Apple Intelligence models are ANE-shaped, but every major open runtime (MLX, llama.cpp, Ollama) uses the GPU. The M5 change is telling: instead of pushing inference to the ANE, Apple put <em>ANE-style matrix units inside the GPU</em> — meeting the runtimes where they live. This is also why MLX now requires macOS 26.2+ to use the Neural Accelerators.</p>
+
+<!-- ============ CH 18 (frontier) ============ -->
+<h2 id="ch18"><span class="num">18</span>Frontier: the 4-bit float war — MXFP4 vs NVFP4 vs TurboQuant</h2>
+
+<p class="meta">The biggest quantization story of 2026: integer quantization is being displaced by 4-bit <em>float</em> formats — and models are now being <em>trained</em> natively at 4 bits.</p>
+
+<h3>The two formats</h3>
+<p>Both store weights in the E2M1 float element type (4 bits: 1 sign, 2 exponent, 1 mantissa — values like ±0.5, ±1.0, ±1.5, … ±6.0). The difference is how each small group of weights is scaled:</p>
+
+<table>
+  <tr><th></th><th>MXFP4 (OCP standard)</th><th>NVFP4 (NVIDIA)</th></tr>
+  <tr><td>Block size</td><td>32 weights</td><td>16 weights</td></tr>
+  <tr><td>Scale type</td><td>E8M0 FP8 — <em>powers of two only</em></td><td>Full FP8 (E4M3) — any value in range</td></tr>
+  <tr><td>Scale overhead</td><td>0.25 bits/weight</td><td>0.5 bits/weight</td></tr>
+  <tr><td>Behavior</td><td>Snaps block scale to nearest power of 2 — cheap hardware, wasted range when a block's dynamic range is awkward</td><td>Tracks local dynamic range tightly — measurably better accuracy where int4 hurts</td></tr>
+</table>
+
+<h3>The 2026 state of the war</h3>
+<ul>
+  <li><strong>Frontier models are now trained quantization-aware at 4 bits.</strong> OpenAI's gpt-oss-20b/120b bake MXFP4 into training — over 90% of their parameters (the MoE experts) are 4-bit by design, which is how the 120B fits on a single 80GB GPU. DeepSeek-V4 uses NVFP4's finer 16-value blocks for the same trick. QAT (quantization-aware training) at 4 bits is becoming the default, not a post-hoc hack.</li>
+  <li><strong>MXFP4 is catching up.</strong> A 2026 study (arXiv 2603.08713) shows enhanced MXFP4 strategies cut its accuracy loss by 62%, closing the gap to NVFP4 from ~10% to &lt;1% on average — same bit budget, near parity.</li>
+  <li><strong>On Apple Silicon, both work — and M5 makes them fast.</strong> The M5's Neural Accelerators handle 4-bit float natively; MLX supports MXFP4 and NVFP4 on macOS 26.2+. NVFP4's finer scaling is a real accuracy win on dense models where 4-bit int visibly degrades.</li>
+  <li><strong>llama.cpp and vLLM both support the formats</strong> (NVFP4 also via Marlin-style kernels on NVIDIA).</li>
+</ul>
+
+<h3>TurboQuant-MLX — the wildcat entrant</h3>
+<p>April 2026: TurboQuant, adapted to MLX, reported usable <strong>2-bit</strong> quantization on dense 1B–7B models (where standard affine quantization collapses), and — more dramatically — a <strong>122B model compressed to run at 44 tok/s on a 64GB Mac</strong> (M4 Max), with quality claimed to beat standard 4-bit. Zero training data required. Treat with benchmark-before-belief caution, but it signals the new frontier: the interesting question is no longer "4-bit vs 8-bit" but "how much better can clever scaling + error feedback get than naive block quantization at any bit width."</p>
+
+<div class="card tip">
+  <h4>What changed for you</h4>
+  <p>The chapter 9 table (Q4_K_M ≈ 4.8 bpw) is now the <em>integer</em> baseline. The 2026 decision tree: prefer <strong>native QAT 4-bit float models</strong> (gpt-oss-style MXFP4, NVFP4-quantized Qwen/DeepSeek distills) when they exist for your model — they're trained for the format and outperform post-hoc int4. On M5+, these formats also get hardware acceleration. GGUF's Q4_K_M remains the compatibility floor; float-4 is the quality ceiling at the same size.</p>
+</div>
+
+<!-- ============ CH 19 (frontier) ============ -->
+<h2 id="ch19"><span class="num">19</span>Frontier: speculative decoding in 2026</h2>
+
+<p class="meta">Speculation went from "a trick" to "the third pillar" (quantization, batching, speculation). The 2026 developments — especially self-speculation — map directly onto Mac hardware.</p>
+
+<h3>The variant landscape</h3>
+
+<table>
+  <tr><th>Family</th><th>Mechanism</th><th>Cost</th><th>2026 status</th></tr>
+  <tr><td>Draft model</td><td>Small model proposes, big model verifies</td><td>Second model in RAM</td><td>Baseline; needs vocab match</td></tr>
+  <tr><td>EAGLE-3 / <b>P-EAGLE</b></td><td>Trained draft head on the model's own hidden states; parallel drafting</td><td>Small head + light training</td><td><b>State of the art for trained drafts</b> — if deploying EAGLE in 2026, use P-EAGLE</td></tr>
+  <tr><td>MTP layers</td><td>Multi-token prediction heads trained into the model itself (DeepSeek-style)</td><td>Built into architecture</td><td>Increasingly native in frontier models</td></tr>
+  <tr><td>n-gram / prompt-lookup</td><td>Copies continuations from the prompt itself (RAG, editing, summarization)</td><td>Free</td><td>Underrated; huge wins on extractive workloads</td></tr>
+  <tr><td>LayerSkip / early-exit</td><td>Model exits early at layer k as its own draft; one model, no second download</td><td>Training recipe</td><td>Self-speculation baseline</td></tr>
+  <tr><td>Kangaroo</td><td>Double early exiting + lightweight adapter</td><td>Tiny adapter</td><td>Lossless self-speculation</td></tr>
+  <tr><td><b>Vegas / SpecAttn</b></td><td>Self-speculation where drafting attends only to KV entries the verification pass found critical</td><td>Training-free, drop-in</td><td><b>2026 frontier</b> — 1.25–2.81× over vLLM</td></tr>
+</table>
+
+<h3>Vegas / SpecAttn: verification-guided sparse attention (Feb 2026)</h3>
+<p>The cleverest 2026 idea: a draft model's biggest weakness is low acceptance rate, and a big cause is drafting over a huge, noisy KV cache. Vegas/SpecAttn makes verification itself <em>identify</em> the critical KV entries (as a byproduct of the batch-verify pass), then drafts attending only to those. Results: 1.25–2.81× decoding throughput over default vLLM, 1.15–1.29× over prior sparse-attention self-speculation methods, and — importantly for Macs — <strong>gains scale with context length</strong>, exactly where decode hurts most. Training-free, implemented in vLLM as plug-and-play.</p>
+
+<h3>What 2026's systematic benchmark found</h3>
+<p><strong>SpecDecode-Bench</strong> (2026) evaluated five variants (n-gram, EAGLE, EAGLE-3, draft-model, MTP) across four models and six workloads. The takeaway that matters: <strong>no single speculation strategy wins everywhere</strong> — acceptance rates are workload-dependent (extractive tasks love n-gram; creative text defeats all drafting), so the winning engine is one that runs <em>multiple</em> drafters and adapts. This is a direct argument for the "speculation as default path with adaptive enable" design in chapter 23.</p>
+
+<div class="card key">
+  <h4>Why this is the Mac's killer optimization</h4>
+  <p>Self-speculative methods need <strong>no second model in RAM</strong> (the Mac's scarce resource) and consume <strong>idle math units</strong> (the Mac's abundant resource during decode). Vegas-style sparse attention + self-speculation is essentially purpose-built for the unified-memory bandwidth-bound regime — it cuts the KV reads per draft step (fewer bytes) while filling the idle compute. If you build one optimization after fused kernels, build this.</p>
+</div>
+
+<!-- ============ CH 20 (frontier) ============ -->
+<h2 id="ch20"><span class="num">20</span>Frontier: distributed Macs — RDMA over Thunderbolt</h2>
+
+<p class="meta">The October 2026 story that changes "the ceiling" from one machine's RAM to your whole desk of machines.</p>
+
+<h3>What Apple shipped</h3>
+<p>MLX 0.21 brought real distributed inference primitives; macOS 26.2 added <strong>RDMA over Thunderbolt 5</strong>; and Apple's JACCL library provides collective communication (send/receive/broadcast/reduce — an MPI-like surface) over that transport with minimal CPU/OS overhead. WWDC26 sessions (232 &amp; 233) documented the full path: <code>mlx.distributed.init(backend="jaccl")</code>, <code>sharded_load()</code> with pipeline/tensor groups, <code>mlx.launch</code> with a generated hostfile, and <code>MLX_METAL_FAST_SYNCH=1</code> (faster GPU↔CPU sync — critical because compute runs on GPU while communication runs on CPU).</p>
+
+<pre><code><span class="c"># WWDC26-style minimal cluster launch</span>
+mlx.distributed_config   <span class="c"># generates the hostfile (hostnames, IPs, RDMA devices)</span>
+mlx.launch --hostfile hosts.json --auto-setup \
+  -m mlx_lm.server --model moonshotai/Kimi-K2.6   <span class="c"># auto-sharded across nodes</span>
+
+<span class="c"># inside your code, the API surface:</span>
+group = mx.distributed.init(strict=True, backend="jaccl")
+model, tokenizer = sharded_load("model-id", pipeline_group, tensor_group)</code></pre>
+
+<h3>The measured numbers (Apple ML Research, October 15, 2026)</h3>
+<ul>
+  <li>Single-machine M5 Ultra vs M3 Ultra on Qwen3.8-27B BF16 (8k-token prompt): decode 19.7 vs 12.5 tok/s (1.58×), TTFT 4.1s vs 18.2s (<strong>4.4×</strong>) — the Ultra tier converts bandwidth directly into prefill and large-model capability.</li>
+  <li>Two Mac Studios (512GB each) on one TB5 cable: <strong>Llama 4 Maverick (~400B MoE) in 4-bit</strong>, ~220GB sharded by <em>expert parallelism</em> — 110GB resident per node.</li>
+  <li>Four-node clusters: up to <strong>3× inference throughput</strong> (WWDC26); ~600 tok/s aggregate fine-tuning in the demo; Apple cites frontier-class distributed runs across four 512GB Mac Studios "exceeding human reading speed."</li>
+</ul>
+
+<h3>Why this architecture works (and when it doesn't)</h3>
+<ul>
+  <li><strong>Expert parallelism is the MoE cheat code.</strong> MoE models shard naturally: each Mac holds a subset of experts, tokens route to whichever node owns the needed expert. Communication is small (routing decisions + activations), memory per node is 1/N of the model. This is how ~400B–2.8T-parameter open models become desk-runnable.</li>
+  <li><strong>Tensor/pipeline parallelism</strong> covers dense models: layers split across nodes, each decode step incurs cross-node sync — RDMA-over-TB5 makes that cheap (~80Gb/s per cable, µs latency), which is why "up to 3× with four nodes" is realistic rather than fantasy.</li>
+  <li><strong>vs NVIDIA's answer:</strong> against a single DGX Spark, an M5 Ultra decodes a 27B dense model ~4× faster (bandwidth wins). Cluster two DGX Sparks over GX10 networking and the comparison flips — for <em>concurrent multi-user serving</em>, not single-stream decode.</li>
+</ul>
+
+<div class="card warn">
+  <h4>The honest costs</h4>
+  <ul>
+    <li>Decode per token in pipeline-parallel mode is still bound by the <em>slowest</em> path through the chain — distributed adds capability (bigger models), and throughput, more than single-stream decode speed.</li>
+    <li>You need macOS 26.2+, MLX ≥ 0.21, Thunderbolt 5 ports on both machines (a 10GbE network is the fallback and is slower).</li>
+    <li>Sharding config (pipeline vs tensor vs expert groups) is still manual for custom strategies — the CLI auto-shards, the Python API exposes raw control.</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <h4>Strategic significance for "beating MLX"</h4>
+  <p>Distributed unified memory resets the roofline game: your "bandwidth" budget becomes per-node bandwidth <em>plus</em> interconnect bandwidth, and expert-parallel MoE sharding minimizes cross-node traffic. An engine built on MLX's distributed primitives — or better, one that improves the cross-node scheduling (batch expert routing to reduce sync count) — competes in a space where MLX itself is only months old. Nobody's optimized yet. Greenfield.</p>
+</div>
+
+<!-- ============ CH 21 (frontier) ============ -->
+<h2 id="ch21"><span class="num">21</span>Frontier: models &amp; runtime news (October 2026)</h2>
+
+<h3>The runtime scoreboard</h3>
+<ul>
+  <li><strong>Ollama 0.19 (Mar 2026) — MLX backend, with fine print.</strong> Decode 57.8 → 111.4 tok/s (+93%) on an M4 Max with Qwen3.5; on Qwen3-Coder-30B-A3B (M4 Pro): 130 vs 43 tok/s — <strong>3× from a software swap</strong>. The fine print that matters: the MLX runner is <em>preview</em>, requires <strong>≥32GB RAM</strong>, initially accelerated only <em>one model family</em>, and <strong>silently falls back to the llama.cpp path</strong> for unsupported models — you must verify you're actually on the fast path.</li>
+  <li><strong>MLX's long-context weakness</strong> (May 2026 analysis): MLX wins decode up to ~40k context, then llama.cpp catches up/overtakes — llama.cpp's KV management and Metal attention kernels handle very long contexts better, and MLX's advantage narrows as attention becomes the cost. Rule: short/medium context → MLX; very long context → benchmark both.</li>
+  <li><strong>llama.cpp didn't stand still:</strong> 1.5–8-bit quants, MXFP4/NVFP4 formats, FlashAttention on Metal, KV-cache quantization, GGUF mmap, and CES 2026-reported optimizations worth up to ~35% on supported paths. It remains day-one compatible with any new architecture (Qwen 3.6, Gemma 4, etc.), has a built-in web UI, and supports VLMs in <code>llama-server</code>.</li>
+  <li><strong>vllm-mlx</strong> remains the serving-tier king (continuous batching, paged KV, prefix caching, OpenAI-compatible API, multimodal vision caching with 28× reuse speedups — see ch. 13).</li>
+  <li><strong>Ollama ecosystem note:</strong> OpenAI/Anthropic-compatible APIs mean coding agents (Claude Code, Codex CLI) can run against local models with zero client changes; image generation arrived in Ollama on macOS (Jan 2026).</li>
+</ul>
+
+<h3>The model landscape — MoE won, QAT-4bit won, China's labs won</h3>
+<table>
+  <tr><th>Model</th><th>Params (total/active)</th><th>Why it matters</th></tr>
+  <tr><td>Qwen3.6-27B (dense)</td><td>27B</td><td><b>The sensation:</b> a single-consumer-GPU dense model scoring 77.2% SWE-bench Verified, <em>beating Alibaba's own 397B MoE flagship from two months earlier</em></td></tr>
+  <tr><td>Qwen3.6-35B-A3B</td><td>35B / 3B</td><td>The local sweet spot of 2026: 73.4% SWE-bench, GPQA 86%, decodes at 3B speed; ~73.8% in some harnesses</td></tr>
+  <tr><td>DeepSeek-V4-Pro / V4-Flash</td><td>1.6T / 49B · 284B / 13B</td><td>Sparse-attention architecture; V4-Pro 80.6% SWE-bench (best published open-weight); V4-Flash inherits the sparse design at 13B-active cost; MIT license</td></tr>
+  <tr><td>Kimi K2.6 / K3 (Moonshot)</td><td>1T+ / 2.8T class</td><td>Best long-running agentic/tool-use open model; K3 is the capability ceiling but far beyond any single Mac (cluster material)</td></tr>
+  <tr><td>GLM-5.x (Z.ai)</td><td>MoE ladder</td><td>Agent strength, cheapest API tier; GLM-5.3 top open-weight on Terminal-Bench 4.0 (41.8%)</td></tr>
+  <tr><td>LFM2.5-24B-A2B (Liquid)</td><td>24B / 2.45B</td><td>~139 tok/s on M5 Max (INT4) — the new "feels instant" tier for Macs; note revenue-capped license</td></tr>
+  <tr><td>Mellum2.1 (JetBrains)</td><td>12B / 2.5B</td><td>~6.7GB Q4, Apache 2.0 — IDE-sized coding specialist</td></tr>
+  <tr><td>Mistral Large 4</td><td>1T / 49B</td><td>Natively multimodal; open weights pending (Oct 2026) — the Western counterweight to watch</td></tr>
+  <tr><td>Nemotron 3 Ultra (NVIDIA)</td><td>550B / 55B</td><td>NVFP4-native open-weight MoE</td></tr>
+  <tr><td>Gemma 4 (Google)</td><td>31B dense, E-series small</td><td>Apache-2.0-ish licensing, multimodal incl. audio; 140+ languages</td></tr>
+</table>
+
+<div class="card key">
+  <h4>Three patterns that define 2026</h4>
+  <ol>
+    <li><strong>MoE is the default frontier architecture</strong> — every leaderboard leader is MoE; capacity is free until you pay RAM, and speed tracks <em>active</em> params (ch. 12).</li>
+    <li><strong>Dense small models got scary good</strong> — Qwen3.6-27B beating a 397B MoE means the "fit-on-one-GPU" tier is genuinely competitive for coding.</li>
+    <li><strong>4-bit QAT-native training</strong> (ch. 18) turned quantization from a lossy afterthought into the deployment format the model was born for.</li>
+  </ol>
+</div>
+
+<h3>What this means for the Mac specifically</h3>
+<p>The binding constraint on a Mac is and remains RAM (ch. 7). October 2026's pragmatic tiers: 32GB Mac → Qwen3.5-9B / GLM-class 9–14B Q4, ~25–35 tok/s. 64GB → 27–35B-A3B MoE Q4 at 40–130 tok/s (the golden tier). 128GB+ → 70B dense or 100B+ MoE at 12–20 tok/s. 512GB M5 Ultra → the entire open-weight frontier except Kimi K3, at readable speeds. And with ch. 20's RDMA clustering, even K2.6-class 1T models are desk-runnable in 4-bit.</p>
+
+<!-- ============ CH 21b (frontier) ============ -->
+<h2 id="ch21b"><span class="num">21b</span>The remaining headroom ledger — what same hardware can still give</h2>
+
+<p>How much capability is unlocked vs still locked, on the silicon you already own? Five levers, each quantified:</p>
+
+<table>
+  <tr><th>#</th><th>Lever</th><th>Mechanism</th><th>Prize</th></tr>
+  <tr><td>1</td><td>Kernel efficiency</td><td>Decode runs at 60–75% of bandwidth ceiling; persistent fused megakernels target 90–95% (proven on NVIDIA)</td><td>+1.3–1.6×</td></tr>
+  <tr><td>2</td><td>Idle compute</td><td>~85–90% of FLOPs idle during decode; speculation spends them to amortize bandwidth across 2–6 tokens/pass (Vegas/SpecAttn: 1.25–2.81×, training-free)</td><td>×2–3</td></tr>
+  <tr><td>3</td><td>Bytes per token</td><td>QAT-native 4-bit float (ch. 18), 2-bit-class schemes (TurboQuant), KV quantization + sparse attention</td><td>×1.5–2 memory; ×1.2–1.5 at long context</td></tr>
+  <tr><td>4</td><td>TTFT (agent turns)</td><td>Parallel tokenization (5.5×) × Neural-Accelerator prefill (3.3–4×) × prefix caching (5.8×) × paged KV</td><td>~10× agent-turn latency</td></tr>
+  <tr><td>5</td><td>Stream sharing</td><td>Batching streams weights once for N sequences; RDMA/TB5 expert-parallel sharding widens the memory pool itself</td><td>Unbounded (capability, not speed)</td></tr>
+</table>
+
+<p><strong>Compounding, from a typical Ollama default baseline:</strong> ×1.4 (kernels) ×2.2 (speculation) ×1.2 (QAT-4float) ×1.3 (sparse KV) ≈ <strong>4× decode</strong>; add the TTFT stack ≈ <strong>10× agent latency</strong>. All on the same chip.</p>
+
+<div class="card warn">
+  <h4>Where there is NO headroom</h4>
+  <ul>
+    <li><strong>Per-token dense decode below the roofline.</strong> bytes/s ÷ bytes/token is physics; every win above comes from fewer bytes, more tokens per pass, or a wider pipe.</li>
+    <li><strong>The ANE.</strong> Fixed-shape graphs, no live KV cache. Apple itself chose to move matrix units into the GPU rather than push inference to the ANE.</li>
+    <li><strong>Memory capacity.</strong> LPDDR supply is industry-wide constrained (the 512GB M5 Ultra tier may stay scarce into 2027). MoE + low-bit QAT are the software answers.</li>
+  </ul>
+</div>
+
+<!-- ============ CH 21c (frontier) ============ -->
+<h2 id="ch21c"><span class="num">21c</span>Micro-models: what 50MB actually buys</h2>
+
+<p>Can a language model under 50MB "work well"? First, the arithmetic — the roofline applies to size too:</p>
+
+<div class="math">50 MB budget →
+  at 4-bit:  ~100M parameters
+  at 2-bit:  ~200M parameters
+  at 8-bit:  ~50M parameters</div>
+
+<h3>What exists in that tier</h3>
+<table>
+  <tr><th>Model</th><th>Params</th><th>Smallest practical size</th><th>Under 50MB?</th></tr>
+  <tr><td>SmolLM2-135M</td><td>135M</td><td>~75–90MB (4-bit), ~40MB (2-bit)</td><td>Yes at 2-bit; borderline at 4-bit</td></tr>
+  <tr><td>MobileLLM-125M (Meta)</td><td>125M</td><td>~70–80MB (4-bit)</td><td>Borderline</td></tr>
+  <tr><td>Gemma 3 270M / FunctionGemma</td><td>270M</td><td>~150–170MB (int4 QAT)</td><td>No — but the quality benchmark for the tier</td></tr>
+  <tr><td>Qwen3.5-2B / SmolLM3-3B class</td><td>2–3B</td><td>~1–2GB (4-bit)</td><td>No</td></tr>
+</table>
+
+<h3>The honest answer on "works well"</h3>
+<ul>
+  <li><strong>General chat / instructions: no.</strong> The 2026 consensus floor for genuinely useful general-purpose generation is ~2–3B at 4-bit (~1.5–2GB). Sub-100M models produce coherent sentences but fail multi-step instructions, long answers, and any reasoning. No quantization or runtime fixes this — the knowledge isn't in 100M parameters.</li>
+  <li><strong>Narrow fine-tuned tasks: yes.</strong> The strongest evidence: Google's <strong>FunctionGemma (270M)</strong> — out of the box it scores 46% on a fixed set of app-intent function calls; fine-tuned on synthetic task data it clears <strong>90% on 8 of 10</strong> functions, doing ~2,000 tok/s prefill on a Pixel 7. A well-fine-tuned micro-model beats a general 70B <em>on its narrow task</em>.</li>
+  <li><strong>The 50MB sweet spots that genuinely work:</strong> intent classification / routing, extraction (dates, entities, amounts), sentiment, PII redaction, autocomplete, structured function-calling, and <strong>embeddings</strong> (a ~20–30M-param embedding model at int8 is ~30–45MB and is state-of-the-practice for retrieval).</li>
+</ul>
+
+<div class="card tip">
+  <h4>The practical recipe for a working &lt;50MB model</h4>
+  <ol>
+    <li>Pick a 100–270M base (SmolLM2-135M, Gemma 3 270M) — both Apache-licensed.</li>
+    <li>Fine-tune with MLX LoRA <em>on your Mac</em> (ch. 14) on your narrow task — synthetic data from a big model works (FunctionGemma's recipe).</li>
+    <li>Quantize: 4-bit if it fits, 2-bit if the task is robust to it (classification tolerates far more than generation).</li>
+    <li>Use it as a <em>specialist</em> next to a bigger model — router, extractor, draft model for speculation (ch. 19). A 50MB draft model is exactly what speculation-first engines want co-resident.</li>
+  </ol>
+</div>
+
+<div class="card key">
+  <h4>The tie-back to the engine roadmap</h4>
+  <p>This tier's killer use isn't standalone chat — it's <strong>the speculative draft model</strong>. A ~40–80MB fine-tuned draft that mirrors your main model's distribution (or a byte-interface draft, ch. 12b) is the cheapest 2× you can ship, and it's the reason a sub-50MB model can make your <em>big</em> model work well.</p>
+</div>
+
+<!-- ============ CH 21d (frontier) ============ -->
+<h2 id="ch21d"><span class="num">21d</span>The model floor — how small can useful models go?</h2>
+
+<h3>The physics floor: knowledge capacity per parameter</h3>
+<p><em>"How much do language models memorize?"</em> (Morris et al., 2025) established a usable conversion: a trained transformer stores roughly <strong>~3.6 bits of knowledge per parameter</strong>.</p>
+
+<div class="math">knowledge capacity ≈ 3.6 bits × params
+
+ 100M params ≈ 45 MB  of facts   (a short book + grammar)
+ 1B   params ≈ 450 MB           (a slice of Wikipedia)
+ 7B   params ≈ 3.2 GB           (broad Wikipedia + code + common sense)
+ 70B  params ≈ 30 GB            (long-tail knowledge)</div>
+
+<p>This is why sub-100M models can't chat usefully: it's a <em>storage</em> problem, not a training problem. English Wikipedia (~2.5B tokens of semantic content) already exceeds a 1B model's capacity. The floor for a fact-bearing general model is set by how much world knowledge the task demands.</p>
+
+<h3>The capability ladder</h3>
+<table>
+  <tr><th>Size</th><th>Genuinely does</th><th>Evidence</th></tr>
+  <tr><td>1–10M</td><td>Fluent small-vocabulary generation</td><td>TinyStories (2023) — the true floor of language ability</td></tr>
+  <tr><td>~50M</td><td>Grammar + basic semantics; autocomplete-grade</td><td>—</td></tr>
+  <tr><td>100–270M</td><td>Narrow fine-tuned tasks</td><td>FunctionGemma 270M: 46% → 90% on function calling</td></tr>
+  <tr><td>~1B</td><td>Simple chat, short summaries; shallow facts</td><td>Gemma 3 1B: MMLU 48%</td></tr>
+  <tr><td>2–3B</td><td><b>General-usefulness floor</b> (2026 consensus)</td><td>SmolLM3-3B, Phi-4-mini 3.8B (MMLU 67.3%), Gemma 4 E2B</td></tr>
+  <tr><td>7–9B</td><td>Solid daily driver</td><td>Qwen3.5-9B</td></tr>
+  <tr><td>27B</td><td>Near-frontier coding</td><td>Qwen3.6-27B: 77.2% SWE-bench Verified</td></tr>
+</table>
+
+<h3>What moves the floor down</h3>
+<ul>
+  <li><strong>Overtraining on better data</strong> — SmolLM2-135M saw 2T tokens; SmolLM3-3B (11.2T) beats Llama 3.2-3B. The biggest floor-mover of 2025–26.</li>
+  <li><strong>Distillation</strong> — Phi models prove the floor is soft: teacher-filtered data gets MMLU 67% into 3.8B params.</li>
+  <li><strong>QAT + float-4 formats</strong> — shrinks bytes, not the knowledge floor.</li>
+  <li><strong>Retrieval / tools</strong> — the conceptual lever: offload knowledge into context. A RAG-augmented 270M answers fact questions a bare 7B can't. RAG deletes the knowledge term from the floor, leaving reasoning + format, which fits in ~100M params.</li>
+  <li><strong>Micro-MoE</strong> — LFM2.5-24B-A2B (24B knowledge / 2.45B active) points at 500M-total/30M-active experiments.</li>
+</ul>
+
+<blockquote><p><strong>Bottom line:</strong> fluent language floor ≈ 1–10M (TinyStories). Working specialist floor ≈ 100–270M. General chat floor ≈ 2–3B at 4-bit — and it has moved down ~3× in two years purely via overtraining + distillation. The floor is only soft if you remove the knowledge requirement (RAG + tools).</p></blockquote>
+
+<!-- ============ CH 21e (frontier) ============ -->
+<h2 id="ch21e"><span class="num">21e</span>Where small models actually win</h2>
+
+<p>The ladder's floors matter less than this question: <em>where do small models outperform — not just "acceptable," but actually better?</em> There are five mechanisms, each producing a category of win.</p>
+
+<h3>Mechanism 1: The task is narrow, so the distribution is tiny</h3>
+<p>A model only needs to model the distribution of <em>its</em> task. Function calling from a fixed app schema, routing a support ticket into 12 queues, extracting dates and amounts from invoices — these have low-entropy output spaces that 100–270M params cover completely. FunctionGemma's 90% on app intents is the canonical result; the pattern repeats across routing/classification/extraction benchmarks, and a fine-tuned specialist regularly beats a general 70B <em>on that task</em> while using 1/300th of the compute.</p>
+
+<h3>Mechanism 2: The knowledge lives in the context, not the weights</h3>
+<p>RAG + tools delete the knowledge-storage term (ch. 21d). Given retrieved documents, a 1B can summarize and answer questions whose facts it could never store. This is why retrieval-augmented small models are the production pattern for private-domain Q&A: your corpus is the memory, the model is only the reader.</p>
+
+<h3>Mechanism 3: Latency and battery are the metric, not quality</h3>
+<p>Keyboard suggestion, smart reply, autocomplete, live transcription need sub-100ms responses; a big model can't compete because physics forbids it, not because it's dumber. Gemma 3 270M: <strong>0.75% battery per 25 conversations</strong>; FunctionGemma does ~2,000 tok/s prefill on a Pixel 7. On the desktop equivalent: LFM2.5-24B-A2B at ~139 tok/s on M5 Max makes agent loops feel instant; Mellum2.1 (12B/2.5B) exists precisely as an IDE-sized completion specialist.</p>
+
+<h3>Mechanism 4: Privacy / locality requirements</h3>
+<p>When the data can't leave the device (health, finance, keyboard content), the smallest model that does the task <em>adequately</em> wins by default — it's not competing on quality, it's competing on "runs locally at all." This is Apple Intelligence's whole design: on-device 3B-class model handling most requests, deferring only hard ones.</p>
+
+<h3>Mechanism 5: Volume economics</h3>
+<p>2026's production reality (DeployBase, BentoML surveys): teams ship <em>task-specific</em> small models far more than general giants. A support bot processing millions of tickets doesn't need frontier quality per reply — it needs 95th-percentile quality at 1/50th the cost and 5× the speed. Small models win the unit-economics game structurally.</p>
+
+<h3>Inside the agent stack — the Mac-specific roles</h3>
+<table>
+  <tr><th>Role</th><th>Model size</th><th>Why small wins</th></tr>
+  <tr><td>Router / intent classifier</td><td>50–270M</td><td>Fixed output space; µs-scale cost</td></tr>
+  <tr><td>Speculative draft model</td><td>40–270M</td><td>Fills idle compute; ~2× on the big model (ch. 19)</td></tr>
+  <tr><td>Guardrail / PII redaction</td><td>50–135M</td><td>Runs before the big model sees anything sensitive</td></tr>
+  <tr><td>Summarizer of tool outputs</td><td>0.5–1B</td><td>Agent loops call it dozens of times per turn</td></tr>
+  <tr><td>Embedder for retrieval</td><td>20–30M</td><td>State of practice; ~30–45MB at int8</td></tr>
+  <tr><td>Formatter / JSON-fixer</td><td>50–135M</td><td>Robust to quantization; error-tolerant downstream</td></tr>
+</table>
+
+<div class="card warn">
+  <h4>Where small models reliably lose</h4>
+  <ul>
+    <li>Multi-step reasoning and planning (the chain breaks in the middle)</li>
+    <li>Knowledge-heavy QA without retrieval (storage floor, ch. 21d)</li>
+    <li>Long-form coherence past a few hundred tokens</li>
+    <li>Creative nuance, style transfer, anything where "the tail" of the distribution matters</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <h4>The synthesis</h4>
+  <p>Small models win wherever the task has (a) a narrow output distribution, (b) knowledge provided by context/tools, (c) latency/battery/volume constraints, or (d) a privacy boundary. The 2026 architecture pattern this produces: <strong>a cascade</strong> — a 50–270M model handling 80% of requests alone, a 3B handling the next 15%, a 9–27B handling the hard 5%. On a Mac, that cascade is free: all three tiers fit in RAM simultaneously, and the small tiers are exactly the draft/router/summarizer roles the big tier needs anyway (ch. 19, 21c).</p>
+</div>
+
+<!-- ============ CH 21f (frontier) ============ -->
+<h2 id="ch21f"><span class="num">21f</span>The smallest open-source image-understanding models</h2>
+
+<table>
+  <tr><th>Model</th><th>Params</th><th>License</th><th>~Disk size</th><th>Strengths</th><th>RAM</th></tr>
+  <tr><td><b>Florence-2 (base)</b></td><td>0.23B</td><td>MIT</td><td>~120–240MB (int8/4-bit)</td><td>Captioning, OCR, detection, grounding w/ bounding boxes, DocVQA</td><td>~1–2GB</td></tr>
+  <tr><td><b>SmolVLM-256M</b></td><td>0.256B</td><td>Apache 2.0</td><td>~140–270MB</td><td>VQA, captioning, doc understanding; &lt;1GB RAM, beats Idefics-80B on most benchmarks</td><td>&lt;1GB</td></tr>
+  <tr><td><b>Moondream 0.5B</b> (Sept 2026)</td><td>0.5B</td><td>Apache 2.0</td><td>~280–550MB</td><td>Full VQA + pointing/grounding; "world's smallest VLM" claim; edge/mobile focus</td><td>~1.5GB</td></tr>
+  <tr><td>SmolVLM-500M</td><td>0.5B</td><td>Apache 2.0</td><td>~550MB–1.1GB</td><td>51% avg multimodal accuracy at 1.2GB VRAM</td><td>1.2GB</td></tr>
+  <tr><td>moondream2 / SmolVLM-2.2B / Qwen2-VL-2B</td><td>~2B</td><td>Apache 2.0 / Qwen</td><td>~1.3–4.9GB</td><td>The "actually reliable" open tier</td><td>4–5GB</td></tr>
+</table>
+
+<h3>Running them on a Mac</h3>
+<ul>
+  <li><strong>mlx-vlm</strong> — MLX-native VLM runner; supports SmolVLM, Qwen2-VL, Moondream, PaliGemma classes. Fastest path on Apple Silicon.</li>
+  <li><strong>Ollama</strong> — <code>ollama run moondream</code>, plus llava/minicpm-v families; simplest setup.</li>
+  <li><strong>llama.cpp mtmd</strong> — multimodal support via GGUF + mmproj vision files; SmolVLM-class models run through <code>llama-server</code> with a built-in web UI.</li>
+</ul>
+
+<h3>Floors and caveats</h3>
+<ul>
+  <li><strong>General VQA/chat floor: ~256M</strong> (SmolVLM-256M) — works via radical visual-token compression (81 tokens per 384×384 patch, up to 90% fewer tokens).</li>
+  <li><strong>Task-specific floor: ~230M</strong> (Florence-2) — structured understanding (OCR/detection/grounding), not open-ended chat.</li>
+  <li><strong>No sub-50MB image understanding exists</strong> — a SigLIP-class vision encoder (100–400M params) must be paid for before any language modeling. Sub-100MB image models are CLIP/SigLIP <em>embedders</em> (retrieval, classification, screening), mirroring ch. 21c's pattern.</li>
+  <li><strong>Mac caveat:</strong> images cost hundreds–thousands of tokens at prefill; vision prefix caching (28× on repeated images, ch. 12b) matters more than model size for agent workloads re-sending screenshots.</li>
+</ul>
+
+<div class="card key">
+  <h4>Pick by task</h4>
+  <p>Smallest true open VLM that works: <strong>SmolVLM-256M</strong>. Smallest open model that does structured image work extremely well: <strong>Florence-2 base</strong>. Smallest new-gen edge VLM with a real roadmap: <strong>Moondream 0.5B</strong>. For agent screenshot work on a Mac: start at SmolVLM-2.2B or Qwen2-VL-2B — reliability tier — and rely on vision prefix caching for speed.</p>
+</div>
+
+<!-- ============ CH 21h (frontier) ============ -->
+<h2 id="ch21h"><span class="num">21h</span>The specialist floor map — smallest open model that beats generalists, per domain</h2>
+
+<p class="meta">Every entry: open weights, downloadable, runs locally. "Beats generalist" = documented win vs a larger general model on the domain's standard benchmark or in production use.</p>
+
+<h3>Speech &amp; audio</h3>
+<table>
+  <tr><th>Task</th><th>Smallest that works well</th><th>Size</th><th>License</th><th>Why it wins</th></tr>
+  <tr><td>Voice activity detection</td><td><b>Silero VAD</b></td><td><b>~2MB</b></td><td>MIT</td><td>Sub-millisecond CPU inference; standard in every voice agent stack; a 2MB model nobody replaces with an LLM</td></tr>
+  <tr><td>Audio denoising</td><td>DeepFilterNet 3</td><td>~3–5MB</td><td>MIT/Apache</td><td>Real-time noise suppression on CPU; decades of DSP-as-neural research</td></tr>
+  <tr><td>ASR (edge)</td><td><b>Moonshine (tiny)</b></td><td><b>27M</b> (~55MB)</td><td>MIT</td><td>Beats Whisper tiny/small at a fraction of the size; built for offline edge transcription</td></tr>
+  <tr><td>ASR (quality)</td><td><b>Parakeet TDT 0.6B v3</b></td><td>631MB (int8 ONNX)</td><td>CC-BY-4.0</td><td><b>The poster child:</b> beats Whisper large-v3 accuracy at ~1/4 the size, 5–10× faster on CPU</td></tr>
+  <tr><td>ASR (99 languages)</td><td>Whisper tiny / distil-whisper</td><td>75MB / ~750MB</td><td>MIT</td><td>Only choice when language coverage matters more than speed</td></tr>
+  <tr><td>TTS</td><td><b>Kokoro-82M</b></td><td><b>~160MB</b></td><td>Apache 2.0</td><td>82M params beats most commercial TTS APIs; trained on &lt;100 hours; runs on CPU, flies on Apple Silicon; no voice cloning</td></tr>
+  <tr><td>TTS (cloning)</td><td>MOSS-TTS 0.6B / Piper</td><td>~600MB / ~20–100MB</td><td>Apache</td><td>3-second cloning at 0.6B; Piper for ultralight per-voice</td></tr>
+  <tr><td>Speaker ID</td><td>ECAPA-TDNN (SpeechBrain)</td><td>~82M (~165MB)</td><td>Apache</td><td>SOTA speaker verification at 82M for years running</td></tr>
+  <tr><td>Music generation</td><td>MusicGen-small</td><td>300M (~1.2GB)</td><td>CC-BY-NC</td><td>Only small open music model that's competitive</td></tr>
+</table>
+
+<h3>Vision</h3>
+<table>
+  <tr><th>Task</th><th>Smallest that works well</th><th>Size</th><th>License</th><th>Why it wins</th></tr>
+  <tr><td>Object detection</td><td><b>YOLO26n</b></td><td><b>~10MB</b> (1.9–2.4M params)</td><td>AGPL</td><td>&gt;40 mAP at ~1.5ms; 100+ FPS on CPU; the generalist giants can't touch edge latency</td></tr>
+  <tr><td>Promptable segmentation</td><td><b>MobileSAM</b></td><td><b>40MB</b> (9.7M)</td><td>Apache</td><td>Same SAM pipeline, TinyViT 5M encoder; 38× faster than SAM</td></tr>
+  <tr><td>Fast segmentation</td><td>YOLOv8n-seg / FastSAM-s</td><td>7MB / 24MB</td><td>AGPL</td><td>945× faster than SAM-b; needs class training</td></tr>
+  <tr><td>Depth estimation</td><td>Depth Anything V2 Small</td><td>25M (~100MB)</td><td>Apache</td><td>Monocular depth at mobile scale; V3 small/base for 2026 pipelines</td></tr>
+  <tr><td>Background removal</td><td>U2-Net / MODNet</td><td>~4–25MB</td><td>Apache</td><td>Portrait matting on CPU, sub-50ms</td></tr>
+  <tr><td>Image classification</td><td>MobileNetV3 / EfficientNet-Lite0</td><td>~5–10MB</td><td>Apache</td><td>Beats ViT accuracy-per-FLOP on edge by an order of magnitude</td></tr>
+  <tr><td>Image-text retrieval</td><td><b>MobileCLIP-S0</b></td><td>~22M (~90MB fp16)</td><td>Apache (Apple)</td><td>Near-CLIP-ViT-B quality at ~3× less latency; the tiny image-retrieval floor</td></tr>
+  <tr><td>OCR / document parsing</td><td>PaddleOCR det+rec / GLM-OCR 1B / <b>FireRed-OCR 2B</b></td><td>~10–30MB / 1B / 2B</td><td>Apache</td><td>PaddleOCR for classic pipelines; <b>FireRed-OCR 2B scores 92.9% on OmniDocBench — beating Qwen3.5-397B and Gemini-3 Pro</b> at 2B params</td></tr>
+</table>
+
+<h3>Text tasks</h3>
+<table>
+  <tr><th>Task</th><th>Smallest that works well</th><th>Size</th><th>License</th><th>Why it wins</th></tr>
+  <tr><td>Embeddings (EN)</td><td>all-MiniLM-L6-v2</td><td><b>22M (~90MB fp16, ~25MB int8)</b></td><td>Apache</td><td>The default workhorse; retrieval quality far above its size class</td></tr>
+  <tr><td>Embeddings (multilingual, best)</td><td><b>EmbeddingGemma-308M</b></td><td>308M (~150MB Q4)</td><td>Gemma</td><td>SOTA under 500M on MTEB; runs on phone-class hardware</td></tr>
+  <tr><td>Reranking</td><td>bge-reranker-base / Qwen3-Reranker-0.6B</td><td>278M / 0.6B</td><td>MIT / Apache</td><td>Rerankers beat LLM-list-reranking at 100× less compute; 0.6B listwise rivals 4B+</td></tr>
+  <tr><td>NER / entity extraction</td><td><b>GLiNER</b></td><td>~0.3B (~150MB Q4)</td><td>MIT</td><td>Zero-shot NER with arbitrary label sets — replaces fine-tuned BERTs and LLM extraction calls</td></tr>
+  <tr><td>Sentiment / classification</td><td>DistilBERT / xlm-roberta-base</td><td>66M / 0.3B</td><td>Apache</td><td>Fine-tuned classifiers beat LLM zero-shot by 10–30 points; µs latency</td></tr>
+  <tr><td>Function calling</td><td><b>FunctionGemma 270M</b></td><td>270M (~150MB Q4)</td><td>Gemma</td><td>46% → 90% fine-tuned on app intents; 2,000 tok/s prefill on a phone</td></tr>
+  <tr><td>On-device FC (general)</td><td>Octopus v2</td><td>2B (~1.2GB Q4)</td><td>Custom (research)</td><td>General function calling without RAG/context overhead</td></tr>
+  <tr><td>Safety guardrail</td><td>Llama Guard 3 1B / ShieldGemma 2B</td><td>1B / 2B (~0.6–1.2GB Q4)</td><td>Llama / Gemma</td><td>~⅓ the false-positive rate of GPT-4-as-judge on Meta's benchmark</td></tr>
+  <tr><td>Router (cascade head)</td><td>fine-tuned DistilBERT / Qwen3-0.6B</td><td>66M–0.6B</td><td>Apache</td><td>Route easy→small/hard→big; saves 10× cost in cascades</td></tr>
+  <tr><td>Draft model (speculation)</td><td>SmolLM2-135M/360M (vocab-matched)</td><td>40–200MB Q4</td><td>Apache</td><td>Fills idle compute; the cheapest 2× on the big model (ch. 19)</td></tr>
+  <tr><td>Math</td><td>Qwen2.5-Math-1.5B</td><td>1.5B (~1GB Q4)</td><td>Apache</td><td>Specialized math SFT beats much larger generalists on GSM8K/MATH</td></tr>
+  <tr><td>Reasoning (distilled)</td><td>DeepSeek-R1-Distill-1.5B</td><td>1.5B</td><td>MIT</td><td>CoT reasoning from a 671B teacher into 1.5B</td></tr>
+</table>
+
+<h3>Code</h3>
+<table>
+  <tr><th>Task</th><th>Smallest that works well</th><th>Size</th><th>License</th><th>Why it wins</th></tr>
+  <tr><td>FIM autocomplete</td><td><b>Qwen2.5-Coder-0.5B</b></td><td>0.5B (~350MB Q4)</td><td>Apache</td><td>Trained for fill-in-the-middle; IDE-grade at phone size</td></tr>
+  <tr><td>IDE edit prediction</td><td>zed-industries zeta / Mellum2.1 (12B/2.5B MoE)</td><td>~3B / 6.7GB Q4</td><td>Apache</td><td>2026's purpose-built edit-prediction models; MoE keeps active params at 2.5B</td></tr>
+  <tr><td>SQL</td><td>defog sqlcoder-7B</td><td>7B (~4.5GB Q4)</td><td>CC-BY-SA</td><td>Beats GPT-4 on SQL eval sets at 7B — SQL is a narrow, schema-shaped task</td></tr>
+</table>
+
+<h3>Translation</h3>
+<table>
+  <tr><th>Task</th><th>Smallest that works well</th><th>Size</th><th>License</th><th>Why it wins</th></tr>
+  <tr><td>Single language pair</td><td>Helsinki-NLP opus-mt</td><td><b>~40–80MB per pair</b></td><td>CC-BY/CC-BY-SA</td><td>MarianMT — a 74M model per pair beats general LLM translation for that pair</td></tr>
+  <tr><td>Many languages</td><td>MADLAD-400 250M/3B</td><td>250M–3B</td><td>Apache</td><td>Best multilingual coverage per param</td></tr>
+  <tr><td>Quality multilingual (2026)</td><td>Tencent Hy-MT2-1.8B</td><td>1.8B (~1.1GB Q4)</td><td>Apache</td><td>2026's efficient translation model; 32 languages</td></tr>
+</table>
+
+<h3>Generation (image / video)</h3>
+<table>
+  <tr><th>Task</th><th>Smallest that works well</th><th>Size</th><th>License</th><th>Why it wins</th></tr>
+  <tr><td>Text-to-image</td><td><b>PixArt-Σ 0.6B</b></td><td>0.6B (~1.2GB fp16, ~350MB Q4)</td><td>Apache</td><td>0.6B DiT matching/beating SDXL (2.6B U-Net) on several benchmarks; 4K native</td></tr>
+  <tr><td>Text-to-image (2026 quality)</td><td>Z-Image Turbo 6B</td><td>6B (~3.5GB Q4)</td><td>Apache</td><td>Few-step generation at 6B — the 2026 quality/size sweet spot</td></tr>
+  <tr><td>Text-to-video</td><td><b>LTX-Video 2B</b></td><td>2B (~1.2GB Q4-ish)</td><td>LTXV / FTM</td><td>Faster-than-realtime video gen at 2B; smaller than every viable alternative by 7×</td></tr>
+</table>
+
+<h3>Computer use (from ch. 21g)</h3>
+<table>
+  <tr><th>Task</th><th>Smallest that works well</th><th>Size</th><th>License</th></tr>
+  <tr><td>GUI grounding (pixels)</td><td>GUI-Actor-2B (+verifier) / UI-TARS-2B</td><td>2B (~1.2GB Q4)</td><td>Apache</td></tr>
+  <tr><td>UI localization (Pareto)</td><td>Holo1.5-3B</td><td>3B</td><td>Apache</td></tr>
+  <tr><td>AX-tree agents (macOS)</td><td>Qwen3-0.6B / Gemma 3 270M class</td><td>0.27–0.6B</td><td>Apache / Gemma</td></tr>
+  <tr><td>Screenshot element detection (pipeline)</td><td>OmniParser-style YOLO + Florence-2</td><td>&lt;0.3B total</td><td>Apache/MIT</td></tr>
+</table>
+
+<div class="card warn">
+  <h4>The honest exception: "specialized &gt; generalist" is not a law</h4>
+  <p>A 2026 systematic benchmark of open safety-guard models (arXiv 2605.28830) found that <em>model size does not correlate with safety performance</em> and that <strong>general-purpose guard models outperformed specialized ones</strong> in several categories — e.g. MetaHateBERT, purpose-built for hate speech, achieved only 15.8% recall across a broader taxonomy. The winning rule: specialists win when the task distribution is genuinely narrow <em>and</em> you evaluate on your own data. Every row above deserves your own eval before production — the "beats generalist" claims are the strongest documented cases, not guarantees.</p>
+</div>
+
+<div class="card key">
+  <h4>The synthesis — your all-specialist Mac stack</h4>
+  <p>Add up the smallest winners: embeddings 25MB + VAD 2MB + denoiser 3MB + ASR 631MB (or Moonshine 55MB) + TTS 160MB + YOLO 10MB + MobileSAM 40MB + MobileCLIP 90MB + GLiNER 150MB + FunctionGemma 150MB + guardrail 600MB + draft model 40MB + FIM coder 350MB + router 66MB ≈ <strong>~2.5GB total for an entire multi-domain AI stack</strong> — leaving 10GB+ for the one general model that matters on a 32GB Mac. This is the 2026 production pattern: a floor of specialists under exactly one generalist.</p>
+</div>
+
+<!-- ============ CH 21i (frontier) ============ -->
+<h2 id="ch21i"><span class="num">21i</span>The 500 tok/s horizon — where SLMs are heading</h2>
+
+<h3>First: what 500 tok/s demands of on-device hardware</h3>
+<p>The roofline (ch. 4) makes 500 tok/s a specific claim, not a vibe:</p>
+
+<div class="math">500 tok/s needs:  bandwidth ÷ bytes-per-token ≥ 500
+
+  M5 Max (614 GB/s)  → ~1.2GB of weights read per token  (≈1B dense at Q4)
+  M5 Ultra (1.2TB/s) → ~2.4GB per token                 (≈2B dense at Q4)
+  ...or ~4–8B total params at Q4 with ×2–3 speculative decoding
+  ...or a MoE with ~1–2B ACTIVE params at Q4 (8B-A1B class)</div>
+
+<p>So "500 tok/s on-device" defines a specific model tier: <strong>~1–2B active parameters</strong> — dense SLMs or the new micro-MoE class. This is exactly why the 2026 model releases matter (LFM2.5-8B-A1B, Qwen3.5-A3B family): they are the first models <em>architected</em> for this threshold. LFM2.5-8B-A1B already serves at 335 tok/s API-side; on-device equivalents on M5-Pro-class silicon are the next step.</p>
+
+<h3>The UX ladder — what each speed tier enables</h3>
+<p>Grounded in the latency research (Brysbaert 2019 reading meta-analysis; Nielsen's response-time limits; the 2026 latency-benchmark literature):</p>
+
+<table>
+  <tr><th>Decode speed</th><th>Perception</th><th>What becomes possible</th></tr>
+  <tr><td>5–6 tok/s</td><td>= adult silent reading speed (238 wpm)</td><td>Reading along as it writes; nothing else</td></tr>
+  <tr><td>~20 tok/s</td><td>Outpaces nearly every reader — TPOT improvements become <em>imperceptible</em> in chat UI</td><td>Acceptable chat. <b>Key insight: past 20, chat doesn't get better — only TTFT does</b> (0.4s TTFT at 100 tok/s feels faster than 1.2s TTFT at 200 tok/s)</td></tr>
+  <tr><td>50–100</td><td>"Instant" chat</td><td>Agent loops become tolerable; a 30-step tool chain in ~30s</td></tr>
+  <tr><td>100–200</td><td>Interjection-speed</td><td>Voice agents at true conversational latency (the telecom voice-agent target: &lt;1s total utterance latency); computer-use loops that don't feel like a slideshow</td></tr>
+  <tr><td>300–500</td><td>Streaming paragraph-level</td><td><b>Reasoning models go interactive</b> — a 10,000-token chain of thought takes 20–30s instead of 2 minutes; thinking stops being a loading bar</td></tr>
+  <tr><td><b>500+</b></td><td>Language becomes a transport, not an artifact</td><td>Everything in the unlocks section below</td></tr>
+</table>
+
+<blockquote><p><strong>The paradox that defines the 500+ era:</strong> at 20 tok/s, chat UX saturates — nobody needs faster chat. The entire value of going to 500+ is <em>non-chat</em> usage: reasoning visibility, agent loops, voice, ambient processing. Speed stops buying better conversations and starts buying new interaction categories.</p></blockquote>
+
+<h3>The capability unlocks at 500+ tok/s on-device</h3>
+
+<ol>
+  <li><strong>Thinking becomes invisible.</strong> Reasoning models generate 2,000–50,000 tokens before answering. At 60 tok/s that's minutes of spinner; at 500 it's seconds — within Nielsen's ~1s flow threshold for short chains. <em>The "AI pauses to think" interaction pattern becomes real-time.</em> This is arguably the single biggest unlock: local models get the capability of reasoning models with the latency of small ones, because thinking tokens stop costing wall-clock time.</li>
+  <li><strong>Agentic loops with self-correction.</strong> A coding agent's value is proportional to iterations it can afford. At 500 tok/s + fast prefill, a local agent can attempt→fail→diagnose→retry ten times in the time one attempt takes today. On-device agents shift from "single shot, hope it's right" to "iterative until correct" — the quality behavior that makes cloud agents feel smart is mostly just iteration speed.</li>
+  <li><strong>Voice-native becomes the default interface.</strong> The full speech loop (VAD→ASR→LLM→TTS) is a pipeline of the ch. 21h specialists: Silero (2MB) + Parakeet (631MB) + SLM + Kokoro (160MB). At 500 tok/s the LLM leg of that loop costs ~10ms per response sentence — the whole loop fits inside conversational latency, and <em>interruption</em> (barge-in) works because the model can regenerate mid-sentence. Local voice assistants go from demo to daily-driver.</li>
+  <li><strong>Ambient &amp; continuous AI.</strong> At 60 tok/s you can't afford to process a screen stream; at 500+, a permanently resident micro-VLM can describe/skim every screen change within a few percent of one core's budget. This enables the "computer that watches with you" category: meeting co-pilots, memory capture, proactive suggestions — the assumed-usage shift from <em>you ask the computer</em> to <em>the computer participates</em>.</li>
+  <li><strong>Local multi-agent swarms.</strong> Three concurrent agents at 500 tok/s = 1,500 tok/s aggregate — feasible only with batched decode (weights streamed once, ch. 12) plus a RAM budget for 3× KV. Claude-style "subagents" become a <em>local</em> pattern: a router SLM spawning task agents, specialists (ch. 21h) doing the heavy calls.</li>
+  <li><strong>The cascade collapses into one instant intelligence.</strong> Ch. 21e's router→specialist→generalist stack only feels good if the router answers in <em>zero</em> perceived time. At 500 tok/s for the 66M router, 100ms for the 3B, and streaming for the big model, the tiering disappears from the user's perception — privacy-preserving local AI finally has the speed to be the <em>default</em> path, with cloud as the escalation tier rather than the first call.</li>
+  <li><strong>Live-generated UI.</strong> An interface that streams UI code/text at 500 tok/s can render whole components as you watch. "AI-generated interface per query" goes from gimmick (too slow to stream) to viable interaction style.</li>
+  <li><strong>On-device self-improvement loops.</strong> Interactive-speed inference makes local RL-from-feedback and rapid LoRA personalization (ch. 14) practical — the model that adjusts to your writing/preferences in-session rather than overnight.</li>
+</ol>
+
+<h3>The hardware path to 500+ (2026 → 2028)</h3>
+<ul>
+  <li><strong>Now (M5 generation):</strong> Neural Accelerators + QAT 4-bit float + micro-MoE get a 1–2B-active model to ~150–300 tok/s on Max/Ultra chips. Speculation adds ×2–3 — <strong>500 tok/s is a software milestone on 2026 hardware, for 1–2B-active models</strong>.</li>
+  <li><strong>2027 (LPDDR6 + PIM):</strong> JEDEC's LPDDR6 standard (published July 2025, updated spec in progress) brings 512GB densities and a narrower x6 interface; bandwidth +10–20%. The real prize is <strong>LPDDR6-PIM</strong> — compute inside the memory: Samsung's LPDDR5X-PIM demo (Hot Chips 2026) exposes <strong>614 GB/s of bank-internal bandwidth</strong> to its compute units. PIM attacks exactly the roofline: decode stops being a data-movement problem when the MACs live next to the DRAM banks. The LP-Spec paper (arXiv 2508.07227) already co-designs speculative inference with PIM dataflows for mobile.</li>
+  <li><strong>The compounding claim:</strong> bandwidth ×2 (LPDDR6) × PIM internal-bandwidth (614 GB/s bank-level) × speculation ×2–3 × micro-MoE active-params ÷4 ⇒ 500–1,000 tok/s <em>on laptops</em>, with 4–8B-A1B-class quality — roughly 2027–2028.</li>
+</ul>
+
+<h3>What doesn't change</h3>
+<ul>
+  <li><strong>TTFT becomes the whole game.</strong> Once decode saturates perception, the only latency users feel is prefill — which makes parallel tokenization (ch. 12b), prefix caching, and fast prefill kernels the highest-value engine features of the 500+ era, not decode.</li>
+  <li><strong>Memory capacity still gates capability.</strong> 500 tok/s with a 2B model is speed without depth; the specialist-stack pattern (ch. 21h) exists precisely because ambient SLMs need surrounding generalists.</li>
+  <li><strong>Bandwidth is still the wall — PIM just moves the wall.</strong> The roofline survives; the constant changes.</li>
+</ul>
+
+<div class="card warn">
+  <h4>October 2026 reality checks on the MLX numbers</h4>
+  <ul>
+    <li><strong>"Engine wins" are model-and-quant dependent:</strong> a 54-run measurement found MLX +41% on dense 27B at 4-bit, <em>parity at 8-bit</em>, and Ollama +22% on a 30B MoE (83 vs 68 tok/s). Benchmarks on your model, not vibes.</li>
+    <li><strong>UI tok/s ≠ wall clock:</strong> on long-context workloads MLX's reported decode speed can hide a prefill wall (one documented case: 51 tok/s reported, ~3 tok/s effective on an 8.5k-context response; another: a 40k-token file sipping 10W for 3.5 minutes before the first token). Measure end-to-end.</li>
+    <li><strong>Rapid-MLX</strong> (open source, Apache 2.0): an MLX server claiming up to 4× over mlx-lm on the same weights, with a verified MTP/speculative lane at <strong>2.02×</strong> sustained (19.4 vs 9.6 tok/s on a 122B mixed-precision artifact) — evidence the speculation-first thesis of ch. 23 is already paying out in the wild.</li>
+  </ul>
+</div>
+
+<div class="card key">
+  <h4>The heading, in one paragraph</h4>
+  <p>SLMs are heading toward being <strong>always-resident infrastructure rather than invoked applications</strong>: a 1–2B-active model (or its specialist cascade) that thinks interactively, answers in voice, watches ambient streams, and orchestrates tools — with the generalist escalating behind it. 500 tok/s on-device is the threshold where local AI stops being a cheaper cloud substitute and starts being a different product: the computer gains a continuous intelligence layer that cloud economics could never give you (privacy, latency, simultaneity). The software problems (fused kernels, speculation-first serving, cluster scheduling, prefill caching) are the ones this guide's ch. 22–23 catalog; the hardware ones (LPDDR6-PIM) are already scheduled. The gap between "assumed usage" of 2023 AI (ask, wait, read) and 2028 AI (delegate, converse, cohabit) is, almost entirely, a tokens-per-second curve.</p>
+</div>
+
+<!-- ============ CH 21j (frontier) ============ -->
+<h2 id="ch21j"><span class="num">21j</span>Diffusion language models — the agent motor</h2>
+
+<p class="meta">For chat, diffusion is a speed story with a quality asterisk. For agents, the trade inverts: the weaknesses matter less, the strengths matter more, and the metric that was irrelevant becomes the whole game.</p>
+
+<h3>Quick primer</h3>
+<p>Autoregressive (AR) generation is a typewriter: token 50 can't exist before 49; every commitment is permanent; errors cascade forward. Diffusion generation is an editor: start with a block of blanks/noise, denoise <strong>all positions in parallel</strong>, revising any token at any step. Cost model: <span class="formula-inline">steps × full-weights-read ÷ bandwidth</span>, amortized across the whole block — short generations favor AR, long structured blocks favor diffusion.</p>
+
+<h3>The state (October 2026)</h3>
+<ul>
+  <li><strong>Mercury 2.5</strong> (Inception, Sept 2026): 1,100+ tok/s in production — "fastest reasoning model in production anywhere"; Mercury 2 ties GPT-5 Mini on AIME; Mercury Coder up to 10× faster than speed-optimized AR with comparable code quality.</li>
+  <li><strong>Quality:</strong> competitive at the mid tier (Haiku-class); composite scores in the 40s vs frontier AR's 60s–70s. Parity <em>not established</em>. Independent guidance: keep an AR fallback for requests where diffusion underperforms.</li>
+  <li><strong>Reasoning debate:</strong> <em>The Flexibility Trap</em> + <em>Thinking Out of Order</em> (Jan 2026) argue arbitrary-order generation decouples output order from reasoning order — a structural limit for long chains. The counter-case: built-in error correction (revise early mistakes instead of cascading them), and post-trained smaller DLMs beating larger AR models on math/logic.</li>
+  <li><strong>Open weights exist:</strong> LLaDA-8B/V, Dream-7B, MDLM, DiffuLLaMA, DiffusionGemma, plus the 2026 distillation line (d3LLM pseudo-trajectory distillation, Efficient-DLM, AR-MAP — AR models as implicit diffusion teachers).</li>
+</ul>
+
+<h3>Why agents change the verdict</h3>
+
+<h4>1. Agents are loops; speed multiplies the loop budget</h4>
+<p>An agent's effective intelligence is proportional to the iterations it can afford: attempt → observe → diagnose → retry. Inception's own product framing: "fast enough to run a hundred times per query." A diffusion model generating 10× the tokens per second converts directly into 10× the agent's per-turn iteration budget — the same mechanism that makes cloud agents feel smart, but paid in FLOPs instead of dollars.</p>
+
+<h4>2. Agent outputs dodge the flexibility trap</h4>
+<p>The anti-reasoning critique targets long <em>narrative</em> chains where order encodes logic. But an agent's per-step output is a short, structured block — a JSON action, a tool call, a summary — where order carries little meaning and any-position revision is pure upside. The trap binds where diffusion is weakest (long prose reasoning) and relaxes exactly where agents generate most of their tokens.</p>
+
+<h4>3. Parallel rollouts are a native operation</h4>
+<p>Sampling k candidate futures and picking the best (self-consistency, best-of-N, tree search) is how frontier agents actually reason well. For AR models each rollout is a separate sequential generation — k× the cost. Diffusion generates k blocks in one parallel batched pass. <strong>Planning-by-simulation goes from an expensive pattern to a cheap primitive.</strong> This is the deepest agent-relevant difference, and it compounds with #1.</p>
+
+<h4>4. Long horizons without KV-cache drag</h4>
+<p>AR agents accumulate a KV cache that grows all session long, slowing and eventually destabilizing (ch. 5). Diffusion blocks are regenerated per step; there's no quadratic attention drag on session length, and block-level regeneration is a natural context-compression mechanism. For 200-step autonomous tasks, that's a structural advantage, not a tuning knob.</p>
+
+<h4>5. Embodied agents already validate this</h4>
+<p>The strongest evidence is from <strong>vision-language-action</strong> models: LLaDA-VLA and dVLA (built on the multimodal diffusion backbone MMaDA) beat AR VLA baselines in both simulation and real-robot evaluations. In domains where the agent must perceive → decide → act in tight loops, diffusion backbones are already winning — robots are the canary for digital agents.</p>
+
+<h3>The architecture this points to</h3>
+<div class="diagram">┌────────────────────────────────────────────┐
+│  <b>Pilot</b> (AR reasoner): deep, sequential,    │
+│  plans, decomposes, judges, writes the hard  │
+│  reasoning — slow and expensive, runs rarely  │
+├────────────────────────────────────────────┤
+│  <b>Motor</b> (diffusion executor): fast, parallel, │
+│  revisable — executes steps, formats tool     │
+│  calls, drafts k candidate actions, runs      │
+│  constantly at 1000+ tok/s                    │
+└────────────────────────────────────────────┘
+        AR-MAP-style distillation between layers
+        (AR teacher → diffusion student)</div>
+
+<p>Two-layer AI: a sequential pilot for genuine reasoning, a parallel motor for everything an agent does that isn't deep reasoning — which is most of the token volume. The hybrid literature (Block Diffusion, causal AR-diffusion, d3LLM) is converging on exactly this inside single models.</p>
+
+<h3>What could still break it</h3>
+<ul>
+  <li><strong>Tool-call faithfulness:</strong> mid-tier quality means schema violations and hallucinated arguments — agents are the least forgiving consumers of output errors (a wrong click is a state change).</li>
+  <li><strong>Long-horizon coherence:</strong> the demo-vs-scale reliability question is open (Mercury 2.5's own coverage flags it); plan AR fallbacks.</li>
+  <li><strong>Local tooling:</strong> no mature MLX/llama.cpp dLLM path yet; open dLLMs run in transformers/vLLM-class stacks — an engine opportunity, not a capability.</li>
+</ul>
+
+<h3>The open diffusion shelf — what you can download today</h3>
+<table>
+  <tr><th>Model</th><th>Params</th><th>License</th><th>Why it matters</th><th>Local runtime</th></tr>
+  <tr><td><b>Dream 7B</b></td><td>7B</td><td>Apache 2.0</td><td><b>Strongest open dLLM:</b> beats LLaDA-8B across all domains with ¼ the training data (0.6T); ARC-C 47.5→59.8 vs LLaDA; superior planning; arbitrary-order generation, infilling; AR-initialized (Qwen2.5) — the recipe that made open diffusion competitive</td><td>llama.cpp (<code>llama-diffusion-cli</code>)</td></tr>
+  <tr><td><b>LLaDA-8B</b></td><td>8B</td><td><b>MIT</b></td><td>First competitive dLLM at 8B: matches LLaMA3-8B MMLU (65.9 vs 65.4) with 6.5× less data; bidirectional attention, no GQA, no KV cache; breaks the reversal curse</td><td>transformers / HF demo</td></tr>
+  <tr><td>iLLaDA-8B (Jun 2026)</td><td>8B</td><td>Apache 2.0</td><td>Improved benchmarks <em>and</em> generation efficiency; drops into existing LLaDA inference code</td><td>same as LLaDA</td></tr>
+  <tr><td>LLaDA-1.5</td><td>8B</td><td>MIT</td><td>VRPO post-trained — first meaningful RL on a dLLM</td><td>same</td></tr>
+  <tr><td><b>RND1</b></td><td>30B MoE, <b>3B active</b></td><td>Apache 2.0</td><td><b>The local-viable flagship:</b> diffusion+AR hybrid MoE; 3B active params means roofline-friendly decode (ch. 21i math applies directly)</td><td>HF; GGUF ports in progress</td></tr>
+  <tr><td>MMaDA-8B</td><td>8B</td><td>MIT</td><td>Multimodal diffusion backbone — the base of dVLA/LLaDA-VLA (the beating-AR-baselines embodied agents)</td><td>transformers</td></tr>
+  <tr><td>DiffuGPT / DiffuLLaMA</td><td>2B / 7B</td><td>Apache</td><td>AR→diffusion conversion research line; the 2B is the smallest <em>instruct-ish</i> open dLLM</td><td>transformers</td></tr>
+  <tr><td>MDLM / SEDD</td><td>~110M–1.3B</td><td>Apache / MIT</td><td>Research-grade tinies; the smallest open diffusion LMs, but not instruct-capable — the "TinyStories floor" of diffusion (ch. 21d analogy)</td><td>research code</td></tr>
+  <tr><td>Gemini Diffusion / Mercury line</td><td>—</td><td><b>Closed / API only</b></td><td>The performance ceiling (1,100+ tok/s production) — not downloadable; the gap the open shelf is chasing</td><td>—</td></tr>
+</table>
+
+<p><strong>Sizes on disk:</strong> Dream-7B and LLaDA-8B at 4-bit ≈ <strong>4–4.5GB</strong> — comfortable on any 16GB Mac, fast on Pro/Max chips. RND1 at Q4 ≈ 16–17GB with only ~3B active params streamed per denoising pass. There is no open diffusion model under 2B that's genuinely instruct-capable yet — the dLLM floor currently sits at the same 2–3B as general AR models (ch. 21d), which is itself a signal: diffusion didn't lower the capability floor, it changed the <em>speed axis</em>.</p>
+
+<div class="card tip">
+  <h4>The engine-opportunity note</h4>
+  <p>llama.cpp supports Dream-class models via <code>llama-diffusion-cli</code>, but there is <strong>no MLX diffusion path</strong> — no fused Metal denoising kernels, no parallel-block batching, no MLX-native RND1. A compute-bound dLLM runtime on Apple Silicon (ch. 21j's "escape from the roofline") is unbuilt. If the AR engine race (ch. 23) is a 20–40% game, a native dLLM runtime is a 2–10× game on the hardware metric that matters (idle FLOPs), against almost no competition.</p>
+</div>
+
+<h3>Can MLX + diffusion hit 500 tok/s on an M4? The arithmetic</h3>
+<div class="math">Diffusion throughput has two regimes:
+
+<b>Large block (compute-bound):</b>  throughput ≈ AR-prefill-rate ÷ steps(S)
+  M4 Max 7B-class Q4 prefill ~800–1,300 tok/s
+  Dream default (S≈32–64)  →  ~10–40 tok/s today
+
+<b>Small block (weight-stream + compute mix):</b>
+  t_step ≈ max( W/bandwidth , 2·P·L/FLOPS )
+  M4 Max, Dream-7B Q4 (W=4.3GB): weight-stream ≈ 8ms/step
+  L=64: compute ≈ 25–30ms/step (compute-bound)
+  S=4 → 64/(4×28ms) ≈ <span class="hl">~570 tok/s — arithmetic says YES</span>
+  S=8 → ~285 tok/s
+
+<b>Verdict:</b> the M4 Max silicon permits 500+ tok/s diffusion decode
+for 64–128-token blocks at S≤4–8. What doesn't exist yet:
+(i) an MLX-native dLLM runtime with fused denoising kernels,
+(ii) an open few-step DISTILLED dLLM (Mercury's trick is distillation,
+not architecture), (iii) instruct quality at S=4. All three are open
+projects; none is blocked by physics.</div>
+
+<blockquote><p><strong>The build that gets there:</strong> MLX runtime for Dream-7B/RND1 (fused batched-denoising Metal kernels, shared-computation caching across steps) + few-step distillation on top (d3LLM-style pseudo-trajectory) + short-block serving for agent-action workloads. Expected: 300–700 tok/s on M4 Max for 64–128-token outputs, 2× that on M5 Max — the agent-motor of ch. 21j, built on hardware you can buy today.</p></blockquote>
+
+<div class="card key">
+  <h4>The future-of-AI synthesis</h4>
+  <p>For chat, diffusion competes on speed and loses on ceiling. For agents, diffusion is plausibly <strong>the right substrate for the token-volume layer</strong>: loops, rollouts, structured calls, revision — the parts of agent work that are motion rather than thought. Combined with ch. 21i's threshold analysis, the 2027+ local stack takes shape: an always-resident diffusion motor (compute-bound — finally using the Mac's idle FLOPs, no KV drag, 500–2,000 tok/s) orchestrated by a small AR pilot, escalating to a frontier generalist for the rare deep-reasoning step. The roofline guide (ch. 4–5) describes the AR world; a compute-bound dLLM path is the first genuine escape from it — and the M5's Neural Accelerators exist almost precisely for that workload.</p>
+</div>
+
+<!-- ============ CH 21k (frontier) ============ -->
+<h2 id="ch21k"><span class="num">21k</span>The missing-unlock audit — what this guide almost missed</h2>
+
+<p>Confession-as-method: chapters 4–23 optimize one thing — <em>how fast you stream autoregressive weights through memory</em>. The diffusion chapter (21j) exposed the blind spot: bigger unlocks change <strong>what generation is</strong>, <strong>who does the computing</strong>, or <strong>where capability comes from</strong>. Here's the full audit.</p>
+
+<h3>A. Hybrid state-space architectures — the KV-cache-free AR world</h3>
+<p><b>The miss:</b> the guide treats the KV cache as a fact of life (ch. 5). It isn't — it's a property of <em>softmax attention</em>. Linear-attention and state-space models (Mamba, RWKV, gated delta nets) carry a fixed-size recurrent state: <strong>O(1) memory per token, no cache, constant decode cost regardless of context length</b>.</p>
+<ul>
+  <li><b>Proof it's real:</b> Liquid's LFM family (LFM2, LFM2.5) is built on conv+SSM hybrids — and ch. 21h's speed champions (LFM2.5-24B-A2B at 139 tok/s on M5 Max) are fast <em>partly because of this</em>. Qwen3-Next-class hybrids (gated delta net layers + a few full-attention layers) validate the recipe at frontier scale.</li>
+  <li><b>Why it's an agent unlock:</b> ch. 21j's "no KV drag at step 200" is exactly what these give <em>natively</em> — 10k-token agent sessions cost the same as 100-token ones. For always-resident ambient models (ch. 21i), fixed state = fixed RAM = the only architecture that lets a SLM run 24/7 without cache management.</li>
+  <li><b>Local status:</b> llama.cpp and MLX support the Mamba/RWKV families; hybrid support is younger. An MLX-native fused recurrent-state decode kernel is another unbuilt, low-competition target.</li>
+</ul>
+
+<h3>B. Mixture-of-Depths — compute routing per token</h3>
+<p><b>The miss:</b> the guide quantizes <em>weights</em> (ch. 9) but never routes <em>tokens</em>. Mixture-of-Depths lets each token skip layers via a learned router — most tokens use ⅓ of the network, hard tokens get everything. Documented: ~2× FLOP reduction at no quality loss on standard benchmarks.</p>
+<ul>
+  <li><b>Synergy:</b> pairs with early-exit self-speculation (ch. 19) — MoD is "LayerSkip but learned and per-token." On Apple Silicon, skipped layers = unstreamed bytes = direct roofline relief during decode.</li>
+  <li><b>Agent angle:</b> an agent's tokens are wildly heterogeneous (boilerplate JSON vs critical reasoning) — uniform compute is the waste MoD deletes.</li>
+</ul>
+
+<h3>C. Recurrent depth / latent reasoning — capability without capacity</h3>
+<p><b>The miss:</b> the whole SLM thesis (ch. 21c–21d) assumed capability scales with parameters. Recurrent-depth models break that: a small block is <em>looped</em> k times before emitting, converting depth-recycling into test-time compute. A ~3.5B recurrent-depth model demonstrated latent reasoning approaching far larger dense models — computationally ~50B-class, memory-wise 3.5B-class.</p>
+<ul>
+  <li><b>Why it's the SLM thesis's best ally:</b> it's the architectural version of "think longer, not bigger" (ch. 21i unlock #1). The knowledge floor (ch. 21d, 3.6 bits/param) still holds — but <em>reasoning</em> decouples from <em>knowledge</em>, and only reasoning needs the loop. A specialist with retrieval (ch. 21e mechanism 2) plus recurrent depth is a genuinely new point on the size↔capability frontier.</li>
+  <li><b>Cost:</b> each loop = one full weights pass — it converts RAM savings into time, exactly the trade 500+ tok/s makes affordable.</li>
+</ul>
+
+<h3>D. Mixture-of-Agents — swarm beats monolith</h3>
+<p><b>The miss:</b> the guide's cascade (ch. 21e) is <em>serial</em> escalation. Mixture-of-Agents is <em>parallel</em>: several small models answer independently, a synthesizer combines them — documented to beat GPT-4-class outputs using mid-tier models in earlier research, and it keeps working in 2026 benchmarks.</p>
+<ul>
+  <li><b>Local economics:</b> cloud pays per token for N models; a Mac pays one-time RAM for co-resident weights. Ch. 12's batching streams weights once for all sequences — a 4×N-agent swarm on a 128GB Mac is RAM-feasible and bandwidth-shared. The cloud can't afford to run MoA at scale; a Mac Studio barely notices.</li>
+  <li><b>Diversity bonus:</b> independent small models disagree usefully — disagreement is the signal the synthesizer exploits; a single big model has no such signal.</li>
+</ul>
+
+<h3>E. Test-time compute on small models — the budget-forcing synergy</h3>
+<p><b>The miss:</b> ch. 21i treated speed as the unlock. The flip side: <strong>s1-style budget forcing</strong> — a small model that thinks 8× longer closes much of the gap to bigger models on reasoning. Speed and size trade directly: at 500 tok/s, a 3B thinking 8× is <em>faster</em> than a 27B thinking 1×. Speed is a capability multiplier, not just a UX metric.</p>
+
+<h3>F. The Metal kernel toolchain — the leverage nobody's using</h3>
+<p><b>The miss:</b> ch. 18–23 assumed you write Metal shaders by hand. The 2026 toolchain exists and is underused: <strong>Triton-on-Metal ports</strong>, <strong>Mojo/MAX</strong> (Modular's stack compiles to Metal), <strong>tinygrad's Metal backend</strong>, plus evidence the gap is real — <strong>Rapid-MLX</strong> (open, Apache 2.0) claims up to 4× over mlx-lm on the same weights with a verified 2.02× speculative lane, and community engines (Lithos) claim to beat MLX outright on supported chips. The lesson: MLX's lead is an engineering margin, not a wall — and the tooling to attack it finally exists.</p>
+
+<h3>G. The small stuff, honestly ranked</h3>
+<ul>
+  <li><strong>Weight streaming from NVMe</strong> — mmap'd tiers beyond RAM (~40–60 GB/s on M4-class SSDs): ~1/10th of bandwidth, but it's "models 2× your RAM" capability. Extension, not unlock.</li>
+  <li><strong>Radix-tree KV sharing</strong> (SGLang's trick) — prefix caching generalized across every request in a session; agent stacks should treat it as mandatory.</li>
+  <li><strong>mlx-ane</strong> — a community effort to run MLX ops on the Neural Engine. Ch. 17 called ANE locked; this is the crack in that wall worth watching.</li>
+  <li><strong>Apple Foundation Models framework</strong> — every Mac now ships with a free on-device 3B-class model API. It reframes "beating MLX": your engine competes against <em>free and preinstalled</em>, which changes the adoption bar from "faster" to "faster + more capable + still zero-config."</li>
+  <li><strong>Browser-resident micro-models</strong> (WebGPU) — the 50–270MB specialist tier (ch. 21c) runs in a tab with zero install; a distribution unlock for the embedder/classifier floor.</li>
+</ul>
+
+<div class="card key">
+  <h4>The audit's meta-lesson</h4>
+  <p>Every miss above shares one shape: we optimized the <em>rate</em> of a fixed process (stream AR weights), and the unlocks change the <em>process</em> — what a token costs (MoD, state-space), where capability lives (recurrent depth, retrieval), who computes (MoA swarms, pilot/motor), or what generation is (diffusion). The remaining AR-kernel work (ch. 23) is the reliable 20–40%; this chapter is the 2–10× list. Ranked by expected value for an Apple Silicon engine: <b>A (state-space hybrids) → J/D (diffusion motor + MoA swarm) → B (MoD) → C (recurrent depth) → F (toolchain)</b>.</p>
+</div>
+
+<!-- ============ CH 22 (was 17) ============ -->
+<h2 id="ch22"><span class="num">22</span>The optimization playbook — ranked by leverage</h2>
+
+<p>What actually moves the needle, from most to least effort-to-payoff:</p>
+
+<h3>Tier 1 — free, do immediately</h3>
+<ol>
+  <li><strong>Use an MLX-backed runtime.</strong> Ollama 0.19+, LM Studio with MLX, or mlx-lm. ~2x decode vs the llama.cpp path. Zero modeling skill required.</li>
+  <li><strong>Quantize to 4-bit.</strong> The default answer. 2x speed, 75% size, ~3% quality.</li>
+  <li><strong>Right-size context.</strong> Don't pay bandwidth for context you don't use.</li>
+  <li><strong>Quantize the KV cache</strong> (q8) at long contexts.</li>
+</ol>
+
+<h3>Tier 2 — config and workflow</h3>
+<ol start="5">
+  <li><strong>Pick MoE models for speed-per-quality</strong> when RAM allows (35B-A3B class).</li>
+  <li><strong>Exploit prefix caching</strong> — structure agent/system prompts to share long stable prefixes; keep conversations on one session.</li>
+  <li><strong>Close RAM-hungry apps</strong> during long generations; bandwidth is contested.</li>
+  <li><strong>Enable speculative decoding</strong> where supported — 2x-ish on top.</li>
+</ol>
+
+<h3>Tier 3 — engine-level engineering</h3>
+<ol start="9">
+  <li><strong>Fused persistent decode kernels</strong> (ch. 18).</li>
+  <li><strong>AOT kernel autotuning per chip/model.</strong></li>
+  <li><strong>Paged KV + prefix cache server</strong> if serving agents/apps (vllm-mlx does this; go beyond it).</li>
+  <li><strong>Output-head optimizations</strong> for large-vocabulary models.</li>
+</ol>
+
+<div class="card key">
+  <h4>The compounding math</h4>
+  <p>These multiply: llama.cpp default (say 25 tok/s on your machine) → MLX backend ×1.5 → 4-bit already assumed → speculation ×2 → prefix caching for agent turns ×5 TTFT → fused kernels ×1.3. Compounding turns "OK" into "feels native." Every factor above is real and demonstrated somewhere in 2025–26 literature.</p>
+</div>
+
+<!-- ============ CH 23 (was 18) ============ -->
+<h2 id="ch23"><span class="num">23</span>Beating MLX — the research program</h2>
+
+<p>MLX is the current champion, so "we can do better" needs specifics. Here is the gap analysis and the build plan.</p>
+
+<h3>Where the remaining headroom is</h3>
+
+<table>
+  <tr><th>Gap</th><th>Why it exists</th><th>Size of prize</th></tr>
+  <tr><td>Decode at 60–75% of bandwidth ceiling</td><td>Kernel launch overhead, un-fused boundaries, non-optimal weight-stream order</td><td>+30–60% decode</td></tr>
+  <tr><td>Speculation not first-class</td><td>Manual setup, no draft management, limited tree verify</td><td>+100–200% decode</td></tr>
+  <tr><td>Static, un-tuned kernels</td><td>MLX kernels are shape-general; no per-chip AOT tuning</td><td>+10–30%, model-dependent</td></tr>
+  <tr><td>KV read competes with weight read</td><td>Cache layout not co-scheduled with weights</td><td>+10–25% at long context</td></tr>
+  <tr><td>Output head costs full V projection</td><td>Naive per-step projection for 100k+ vocabs</td><td>+5–15% for big-vocab models</td></tr>
+</table>
+
+<h3>The architecture of an MLX-beating engine</h3>
+
+<ol>
+  <li><strong>One persistent fused decode kernel.</strong> Instead of ~dozens of shader calls per token (attention, norm, MLP, …), compile a single megakernel per model that executes an entire transformer block — or even all blocks — while keeping intermediates in registers/threadgroup memory. Weights stream through in a precomputed order that saturates the bus. Proof this direction works: megakernel approaches on NVIDIA (e.g. "Mirage/MP persistent kernels") hit 95%+ of bandwidth ceilings vs ~60% for conventional engines.</li>
+  <li><strong>AOT tuning pass.</strong> At model load (or download time), run a 10-second autotune: benchmark candidate kernel tilings on the user's actual chip with the model's actual shapes; cache the winner. This is what tinygrad does and what Metal's own shader pipelines make easy to piggyback on.</li>
+  <li><strong>Speculation as the default path.</strong> Ship with a tiny draft model auto-selected per main model; implement tree verification; measure acceptance and adaptively disable when acceptance is low. Users get 2x without knowing the word "speculative."</li>
+  <li><strong>Bandwidth scheduler.</strong> Treat decode as a scheduling problem: order the stream of (weights + KV pages) reads so every memory transaction is fully used. Prefetch next block's weights while current block computes — the GPU's idle math time is exactly enough to hide latency if scheduled right.</li>
+  <li><strong>Serving mode with paged KV + prefix reuse</strong> for agent workloads — where MLX core is weakest and vllm-mlx shows the demand.</li>
+</ol>
+
+<h3>A realistic build order</h3>
+
+<pre><code>Phase 0  Fork the measurement rig: fixed model (Qwen3-8B-4bit),
+         fixed prompt set, mlx-lm and llama.cpp as baselines.
+Phase 1  Replace the decode hot path in a minimal MLX-like runner
+         with fused Metal shaders for: RMSNorm+residual,
+         quantized GEMV, attention inner loop.
+         Target: 1.3x over mlx-lm on decode.
+Phase 2  AOT autotuner over tiling parameters, cached per chip+model.
+         Target: another 1.1–1.2x.
+Phase 3  Speculative decoding: bundled draft, tree verify,
+         adaptive enable. Target: 2x on top.
+Phase 4  Paged KV server with prefix cache. Target: agent TTFT −5x.</code></pre>
+
+<blockquote><p><strong>The honest ceiling check:</strong> with weights at 4 bits and a perfect schedule, decode = bandwidth ÷ bytes. An engine can't beat that for single-stream dense decode — it can only <em>reach</em> it (MLX is 60–75% there), then go beyond it with speculation (amortizing bandwidth across tokens), MoE (smaller active bytes), and batching (sharing the stream). Any claim of "beating the roofline" without one of those mechanisms is a measurement artifact.</p></blockquote>
+
+<div class="card key">
+  <h4>October 2026 addendum — what changed in this gap analysis</h4>
+  <ul>
+    <li><strong>The hardware moved (ch. 17):</strong> M5's Neural Accelerators natively compute 4-bit float. The decode kernel you want to write can now use native MXFP4/NVFP4 matrix ops instead of integer-dequant-plus-FP16 — a new kernel-design axis that didn't exist on M4.</li>
+    <li><strong>The model format moved (ch. 18):</strong> QAT-native 4-bit float models (gpt-oss, DeepSeek-V4, Nemotron) mean the "quantization overhead" of dequantizing inside the matmul partially vanishes — weights <em>are</em> the compute format.</li>
+    <li><strong>The speculation frontier moved (ch. 19):</strong> Vegas/SpecAttn shows training-free self-speculation + sparse attention yields 1.25–2.81× and scales with context. It runs in vLLM but nobody has productized it on Apple Silicon — that's an open, named target.</li>
+    <li><strong>The ceiling moved (ch. 20):</strong> RDMA/TB5 + JACCL turns N Macs into one memory pool. A new engine can treat the cluster as the target hardware from day one (expert-parallel MoE routing, batched cross-node sync) — a space where MLX is only months old and unoptimized.</li>
+    <li><strong>What MLX still has that you don't:</strong> Apple's own M5-tuned kernels, the ecosystem, and distribution (Ollama/LM Studio). Beating it means being faster <em>where it's weak</em>: long-context decode (llama.cpp already eats MLX's lunch past ~40k), speculation-first serving, and cluster scheduling.</li>
+  </ul>
+</div>
+
+<!-- ============ CH 24 (was 19) ============ -->
+<h2 id="ch24"><span class="num">24</span>Glossary</h2>
+
+<table>
+  <tr><td>TTFT</td><td>Time to first token — the pause before generation starts (prefill latency)</td></tr>
+  <tr><td>Decode</td><td>Sequential one-token-at-a-time generation phase; memory-bound</td></tr>
+  <tr><td>Prefill</td><td>Parallel processing of the prompt; compute-bound</td></tr>
+  <tr><td>KV cache</td><td>Stored key/value vectors of past tokens, read every step</td></tr>
+  <tr><td>GGUF</td><td>llama.cpp's single-file model format (weights + tokenizer + metadata)</td></tr>
+  <tr><td>GQA</td><td>Grouped-query attention — fewer KV heads to shrink the cache</td></tr>
+  <tr><td>MoE</td><td>Mixture of Experts — many params, few active per token; fast decode</td></tr>
+  <tr><td>Roofline</td><td>Model of whether you're limited by compute or bandwidth</td></tr>
+  <tr><td>Kernel fusion</td><td>Merging consecutive ops into one GPU shader to cut launch overhead</td></tr>
+  <tr><td>Speculative decoding</td><td>Draft k tokens with a cheap model, verify in one big pass; ~2–3x</td></tr>
+  <tr><td>Prefix caching</td><td>Reusing KV cache for shared prompt beginnings across requests</td></tr>
+  <tr><td>Paged attention</td><td>KV cache in fixed-size pages; no fragmentation, evictable</td></tr>
+  <tr><td>Quantization</td><td>Storing weights at reduced precision (4/8-bit) with scale factors</td></tr>
+  <tr><td>Unified memory</td><td>Single RAM pool addressable by CPU and GPU with zero copies</td></tr>
+  <tr><td>LoRA</td><td>Low-rank adapter fine-tuning — cheap, works on a Mac via MLX</td></tr>
+  <tr><td>Continuous batching</td><td>Dynamic interleaving of requests to share weight streaming</td></tr>
+  <tr><td>Neural Accelerators</td><td>Matrix units inside each M5+ GPU core; native low-precision (4-bit float) math</td></tr>
+  <tr><td>MXFP4</td><td>OCP 4-bit float format: 32-weight blocks, power-of-two FP8 scale; gpt-oss trains in it</td></tr>
+  <tr><td>NVFP4</td><td>NVIDIA 4-bit float format: 16-weight blocks, true FP8 scale; finer accuracy</td></tr>
+  <tr><td>QAT</td><td>Quantization-aware training — model trained in the deployed low-precision format</td></tr>
+  <tr><td>Self-speculative decoding</td><td>Model drafts with a subset of itself (early exit / skipped layers); no second model</td></tr>
+  <tr><td>Vegas / SpecAttn</td><td>Verification-guided sparse attention; training-free self-speculation, 1.25–2.81× over vLLM</td></tr>
+  <tr><td>JACCL</td><td>Apple's collective-communication library over RDMA/Thunderbolt for MLX clusters</td></tr>
+  <tr><td>RDMA (TB5)</td><td>Direct memory-to-memory transfer between Macs over Thunderbolt 5, macOS 26.2+</td></tr>
+  <tr><td>Expert parallelism</td><td>Sharding MoE experts across nodes; minimal cross-node traffic per token</td></tr>
+</table>
+
+<!-- ============ CH 25 (was 20) ============ -->
+<h2 id="ch25"><span class="num">25</span>Reading list</h2>
+
+<h3>Papers (the canon, mostly 2024–2026)</h3>
+<ul>
+  <li><em>Attention Is All You Need</em> (2017) — the transformer. Skim figures 1–2.</li>
+  <li><em>FlashAttention</em> (2022) / <em>FlashAttention-2</em> (2023) — why attention doesn't need O(N²) memory.</li>
+  <li><em>GQA</em> (2023) — grouped-query attention.</li>
+  <li><em>Fast Inference from Transformers via Speculative Decoding</em> (2023, Leviathan et al.) — the speculation paper.</li>
+  <li><em>Medusa</em> (2024) — multi-head self-speculation.</li>
+  <li><em>Efficient Memory Management for LLM Serving with PagedAttention</em> (2023, vLLM).</li>
+  <li><em>Mixtral of Experts</em> (2024) — MoE architecture in practice.</li>
+  <li><em>A Comparative Study of MLX, MLC-LLM, Ollama, llama.cpp on Apple Silicon</em> (arXiv 2511.05502, 2025).</li>
+  <li><em>Native LLM and MLLM Inference at Scale on Apple Silicon</em> (arXiv 2601.19139, EuroMLSys '26) — the vllm-mlx paper; 21–87% over llama.cpp.</li>
+  <li><em>Profiling LLM Inference on Apple Silicon: A Quantization Perspective</em> (2025).</li>
+  <li><em>LoPT: Lossless Parallel Tokenization Acceleration for Long-Context LLM Inference</em> (ACL 2026) — parallel BPE with bit-identical output.</li>
+  <li><em>Byte Latent Transformer</em> (Meta, 2024) — tokenizer-free dynamic byte patches.</li>
+  <li><em>Byte-Level Distillation / ByteSampler</em> (2025–26) — byte interfaces; makes speculative decoding tokenizer-agnostic.</li>
+  <li><em>Vegas / SpecAttn: Self-Speculative Decoding with Verification-Guided Sparse Attention</em> (arXiv 2602.07223, 2026) — training-free speculation frontier.</li>
+  <li><em>SpecDecode-Bench</em> (2026) — systematic evaluation of five speculation variants; "no strategy wins everywhere."</li>
+  <li><em>MXFP4 Quantization Error Reduction</em> (arXiv 2603.08713, 2026) — closing the MXFP4↔NVFP4 gap to &lt;1%.</li>
+  <li><em>LayerSkip</em> (2024) + <em>Kangaroo</em> (NeurIPS 2024) — self-speculation via early exit.</li>
+</ul>
+
+<h3>Primary sources — the October 2026 wave</h3>
+<ul>
+  <li><em>Exploring LLMs with MLX and the Neural Accelerators in the M5 GPU</em> (Apple ML Research) — TTFT 3.3–4×, decode ~1.2×.</li>
+  <li><em>Local and Distributed Large LLM Inference with MLX and RDMA on Mac Studio</em> (Apple ML Research, Oct 15, 2026).</li>
+  <li><strong>WWDC26 sessions 232 &amp; 233</strong> — "Run local agentic AI on the Mac using MLX" and "Explore distributed inference and training with MLX."</li>
+  <li>Ollama 0.19 release notes (March 30, 2026) — the MLX backend switch, with the preview/32GB/fallback caveats.</li>
+  <li><em>GPU vs Apple Neural Engine for Local LLM Inference on M5 Max</em> (Contra Collective, 2026).</li>
+  <li><em>NVFP4 on Apple Silicon with MLX</em> (Contra Collective, 2026) — the two 4-bit float formats, decoded.</li>
+  <li>LLMCheck chip index (Oct 2026) — bandwidth/provenance-corrected chip table.</li>
+  <li>BenchLM / tech-insider / vdf.ai open-weight rankings (Oct 2026) — the model landscape.</li>
+</ul>
+
+<h3>Codebases to study (in build order)</h3>
+<ol>
+  <li><strong>mlx-lm</strong> — cleanest readable decode loop in Swift-free Python; start here.</li>
+  <li><strong>llama.cpp</strong> (ggml/src/ggml-metal) — the reference Metal kernels for quantized matmul.</li>
+  <li><strong>vllm-mlx</strong> — serving layer patterns: paging, batching, prefix cache.</li>
+  <li><strong>tinygrad</strong> — what AOT-tuned kernels look like when taken seriously.</li>
+</ol>
+
+<h3>Engineering blogs</h3>
+<ul>
+  <li>Ollama's March 2026 MLX announcement (hard numbers for the backend switch).</li>
+  <li>kubesimplify's mlxcel deep dive (Rust-native MLX engine, honest methodology).</li>
+  <li>local-llm.net and starmorph Apple-Silicon benchmark write-ups (2026).</li>
+</ul>
+
+<div class="card tip">
+  <h4>Suggested learning path</h4>
+  <ol>
+    <li>Read ch. 1–4 again until the roofline formula feels obvious.</li>
+    <li>Install mlx-lm; run the 8B model; compute its % of bandwidth ceiling yourself.</li>
+    <li>Skim the Leviathan speculation paper; then run MLX's speculative demo and watch tok/s jump.</li>
+    <li>Read the EuroMLSys '26 paper for what serving on Mac looks like.</li>
+    <li>Open ggml-metal.m and find the quantized GEMV kernel. This is the code you'll be competing with.</li>
+  </ol>
+</div>
+
+<div class="footer">
+  <p>Local LLM Inference — The Complete Deep Dive · October 2026 · Self-contained single file · Numbers are benchmarks-reported approximations; your hardware varies.</p>
+</div>
+
+</main>
+</div>
+</body>
+</html>
